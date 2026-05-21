@@ -874,3 +874,7 @@ print("Очищенный ввод:", cleaned)
 text_with_email = "Свяжитесь с нами по адресу support@example.com для помощи"
 extracted_email = extract_email_from_text(text_with_email)
 print("Извлеченный email:", extracted_email)
+
+
+
+# ... работа с файлами ...
