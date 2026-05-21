@@ -14,3 +14,5 @@ class Product:
         if self.quantity < amount:
             raise InsufficientStockError(f'Товара недостаточно. На складе: {self.quantity}, требуется: {amount}')
         self.quantity = self.quantity - amount
+
+# Обновлён класс Product
