@@ -17,3 +17,7 @@ class Product:
 
 # Обновлён класс Product
 # Тестовое изменение для stash
+
+def apply_discount(self, percent):
+    self.price = self.price * (1 - percent / 100)
+    return self.price
