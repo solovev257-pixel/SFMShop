@@ -16,3 +16,4 @@ class Product:
         self.quantity = self.quantity - amount
 
 # Обновлён класс Product
+# Тестовое изменение для stash
