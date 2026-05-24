@@ -21,3 +21,10 @@ class Product:
 def apply_discount(self, percent):
     self.price = self.price * (1 - percent / 100)
     return self.price
+
+def check_stock(self):
+    return self.quantity > 0
+
+def update_stock(self, amount):
+    self.quantity += amount
+    return self.quantity
