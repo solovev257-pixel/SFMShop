@@ -15,16 +15,16 @@ class Product:
             raise InsufficientStockError(f'Товара недостаточно. На складе: {self.quantity}, требуется: {amount}')
         self.quantity = self.quantity - amount
 
-# Обновлён класс Product
-# Тестовое изменение для stash
+    def apply_discount(self, percent):
+        self.price = self.price * (1 - percent / 100)
+        return self.price
 
-def apply_discount(self, percent):
-    self.price = self.price * (1 - percent / 100)
-    return self.price
+    def check_stock(self):
+        return self.quantity > 0
 
-def check_stock(self):
-    return self.quantity > 0
+    def update_stock(self, amount):
+        self.quantity += amount
+        return self.quantity
 
-def update_stock(self, amount):
-    self.quantity += amount
-    return self.quantity
+    def get_total_price(self):
+        return self.price * self.quantity
