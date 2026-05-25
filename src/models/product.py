@@ -31,3 +31,6 @@ def calculate_shipping(self):
     if self.quantity > 10:
         return 0
     return 250
+
+def get_weight(self):
+    return self.quantity * 0.5
