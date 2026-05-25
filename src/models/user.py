@@ -10,3 +10,4 @@ def validate_email(self):
     if "@" not in self.email:
         raise ValueError("Неверный формат email")
     return True
+# обновлён класс User
