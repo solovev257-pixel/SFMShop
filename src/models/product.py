@@ -36,3 +36,6 @@ def get_category(self):
     if self.price > 1000:
         return "премиум"
     return "стандарт"
+
+def get_weight(self):
+    return self.quantity * 0.5
