@@ -26,5 +26,7 @@ class Product:
         self.quantity += amount
         return self.quantity
 
-    def get_total_price(self):
-        return self.price * self.quantity
+
+def get_total_price(self):
+    # версия из feature ветки
+    return self.price * self.quantity
