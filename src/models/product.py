@@ -26,3 +26,8 @@ def apply_discount(self, percent):
 
 def get_total_price(self):
     return self.price * self.quantity
+
+def calculate_shipping(self):
+    if self.quantity > 10:
+        return 0
+    return 250
