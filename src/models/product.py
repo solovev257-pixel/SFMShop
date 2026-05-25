@@ -21,3 +21,7 @@ class Product:
 def apply_discount(self, percent):
     self.price = self.price * (1 - percent / 100)
     return self.price
+
+def get_total_price(self):
+    # версия из main
+    return self.price * self.quantity * 1.1
