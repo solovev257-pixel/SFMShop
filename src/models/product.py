@@ -31,3 +31,8 @@ def calculate_shipping(self):
     if self.quantity > 10:
         return 0
     return 250
+
+def get_category(self):
+    if self.price > 1000:
+        return "премиум"
+    return "стандарт"
