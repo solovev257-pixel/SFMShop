@@ -1,0 +1,99 @@
+HTTP методы для проекта SFMShop
+================================
+
+1. Получение списка товаров
+   Метод: GET
+   Путь: /products
+   Статус успеха: 200 OK
+   Пример запроса:
+   GET /products HTTP/1.1
+   Host: sfmshop.com
+
+   Пример ответа:
+   HTTP/1.1 200 OK
+   Content-Type: application/json
+   [{"id": 1, "name": "Ноутбук", "price": 50000}]
+
+2. Получение товара по ID
+   Метод: GET
+   Путь: /products/{id}
+   Статус успеха: 200 OK
+   Статус ошибки: 404 Not Found
+   Пример запроса:
+   GET /products/1 HTTP/1.1
+   Host: sfmshop.com
+
+   Пример ответа (найден):
+   HTTP/1.1 200 OK
+   Content-Type: application/json
+   {"id": 1, "name": "Ноутбук", "price": 50000}
+
+   Пример ответа (не найден):
+   HTTP/1.1 404 Not Found
+   Content-Type: application/json
+   {"error": "Товар с id=1 не найден"}
+
+3. Создание нового заказа
+   Метод: POST
+   Путь: /orders
+   Статус успеха: 201 Created
+   Пример запроса:
+   POST /orders HTTP/1.1
+   Host: sfmshop.com
+   Content-Type: application/json
+
+   {
+     "user_id": 1,
+     "product_id": 2,
+     "quantity": 1
+   }
+
+   Пример ответа:
+   HTTP/1.1 201 Created
+   Content-Type: application/json
+   {"id": 5, "message": "Заказ создан"}
+
+4. Обновление данных товара
+   Метод: PUT
+   Путь: /products/{id}
+   Статус успеха: 200 OK
+   Пример запроса:
+   PUT /products/1 HTTP/1.1
+   Host: sfmshop.com
+   Content-Type: application/json
+
+   {
+     "name": "Ноутбук обновлённый",
+     "price": 45000
+   }
+
+   Пример ответа:
+   HTTP/1.1 200 OK
+   Content-Type: application/json
+   {"id": 1, "name": "Ноутбук обновлённый", "price": 45000}
+
+5. Удаление товара
+   Метод: DELETE
+   Путь: /products/{id}
+   Статус успеха: 200 OK
+   Пример запроса:
+   DELETE /products/1 HTTP/1.1
+   Host: sfmshop.com
+
+   Пример ответа:
+   HTTP/1.1 200 OK
+   Content-Type: application/json
+   {"message": "Товар удалён"}
+
+6. Получение заказов пользователя
+   Метод: GET
+   Путь: /users/{id}/orders
+   Статус успеха: 200 OK
+   Пример запроса:
+   GET /users/1/orders HTTP/1.1
+   Host: sfmshop.com
+
+   Пример ответа:
+   HTTP/1.1 200 OK
+   Content-Type: application/json
+   [{"id": 5, "product_id": 2, "quantity": 1}]
