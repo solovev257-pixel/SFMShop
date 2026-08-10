@@ -1,36 +1,71 @@
-from src.models.exceptions import NegativePriceError, InsufficientStockError, SFMShopException
+# from src.models.exceptions import NegativePriceError, InsufficientStockError, SFMShopException
+#
+#
+# class Product:
+#
+#     def __init__(self, name, price, quantity):
+#         self.name = name
+#         if price < 0:
+#             raise NegativePriceError('Цена не может быть отрицательной')
+#         self.price = price
+#         self.quantity = quantity
+#
+#     def sell(self, amount):
+#         if self.quantity < amount:
+#             raise InsufficientStockError(f'Товара недостаточно. На складе: {self.quantity}, требуется: {amount}')
+#         self.quantity = self.quantity - amount
+#
+#     def apply_discount(self, percent):
+#         self.price = self.price * (1 - percent / 100)
+#         return self.price
+#
+#
+# def apply_discount(self, percent):
+#     self.price = self.price * (1 - percent / 100)
+#     return self.price
+#
+# def get_total_price(self):
+#     return self.price * self.quantity
+#
+# def calculate_shipping(self):
+#     if self.quantity > 10:
+#         return 0
+#     return 250
+#
+# def get_weight(self):
+#     return self.quantity * 0.5
 
+from dataclasses import dataclass
+
+@dataclass
 
 class Product:
+    name: str
+    price: float
+    quantity: int = 0
 
-    def __init__(self, name, price, quantity):
-        self.name = name
-        if price < 0:
-            raise NegativePriceError('Цена не может быть отрицательной')
-        self.price = price
-        self.quantity = quantity
+    def __post_init__(self):
+        if self.price < 0:
+            raise ValueError("Цена не может быть отрицательной")
+        if self.quantity < 0:
+            raise ValueError("Количество не может быть отрицательным")
 
-    def sell(self, amount):
-        if self.quantity < amount:
-            raise InsufficientStockError(f'Товара недостаточно. На складе: {self.quantity}, требуется: {amount}')
-        self.quantity = self.quantity - amount
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            name=data["name"],
+            price=data["price"],
+            quantity=data["quantity"]
+                )
 
-    def apply_discount(self, percent):
-        self.price = self.price * (1 - percent / 100)
-        return self.price
+    @staticmethod
+    def calculate_discount(price, discount_percent):
+        return price * (1 - discount_percent / 100)
 
-
-def apply_discount(self, percent):
-    self.price = self.price * (1 - percent / 100)
-    return self.price
-
-def get_total_price(self):
-    return self.price * self.quantity
-
-def calculate_shipping(self):
-    if self.quantity > 10:
-        return 0
-    return 250
-
-def get_weight(self):
-    return self.quantity * 0.5
+product1 = Product("Ноутбук", 1000, 10)
+print(product1)
+data = {"name": "Мышь", "price": 500, "quantity": 20}
+product2 = Product.from_dict(data)
+print(product2)
+result = Product.calculate_discount(1000, 10)
+print(result)
