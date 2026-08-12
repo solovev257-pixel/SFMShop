@@ -35,37 +35,53 @@
 # def get_weight(self):
 #     return self.quantity * 0.5
 
-from dataclasses import dataclass
+# from dataclasses import dataclass
+#
+# @dataclass
+#
+# class Product:
+#     name: str
+#     price: float
+#     quantity: int = 0
+#
+#     def __post_init__(self):
+#         if self.price < 0:
+#             raise ValueError("Цена не может быть отрицательной")
+#         if self.quantity < 0:
+#             raise ValueError("Количество не может быть отрицательным")
+#
+#     @classmethod
+#     def from_dict(cls, data):
+#         return cls(
+#             name=data["name"],
+#             price=data["price"],
+#             quantity=data["quantity"]
+#                 )
+#
+#     @staticmethod
+#     def calculate_discount(price, discount_percent):
+#         return price * (1 - discount_percent / 100)
+#
+# product1 = Product("Ноутбук", 1000, 10)
+# print(product1)
+# data = {"name": "Мышь", "price": 500, "quantity": 20}
+# product2 = Product.from_dict(data)
+# print(product2)
+# result = Product.calculate_discount(1000, 10)
+# print(result)
 
-@dataclass
+from src.models.mixins import LoggableMixin, ValidatableMixin, SerializableMixin
 
-class Product:
-    name: str
-    price: float
-    quantity: int = 0
+class Product(LoggableMixin, ValidatableMixin, SerializableMixin):
+    def __init__(self, name, price, quantity):
+        self.name = name
+        self.price = price
+        self.quantity = quantity
+        self.log(f"Создан товар: {name}")
 
-    def __post_init__(self):
+    def validate(self):
         if self.price < 0:
-            raise ValueError("Цена не может быть отрицательной")
+            raise ValueError('цена не отрицательная')
         if self.quantity < 0:
-            raise ValueError("Количество не может быть отрицательным")
-
-    @classmethod
-    def from_dict(cls, data):
-        return cls(
-            name=data["name"],
-            price=data["price"],
-            quantity=data["quantity"]
-                )
-
-    @staticmethod
-    def calculate_discount(price, discount_percent):
-        return price * (1 - discount_percent / 100)
-
-product1 = Product("Ноутбук", 1000, 10)
-print(product1)
-data = {"name": "Мышь", "price": 500, "quantity": 20}
-product2 = Product.from_dict(data)
-print(product2)
-result = Product.calculate_discount(1000, 10)
-print(result)
+            raise ValueError('Количество должно быть положитиельное')
+        return True
