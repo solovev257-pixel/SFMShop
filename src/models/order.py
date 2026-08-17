@@ -18,15 +18,22 @@
 #             return 'Заказ #' + str(self.order_id) + ' на сумму ' + str(self.total) + ' руб. (Пользователь: ' + user_name + ')'
 #         return 'Заказ на сумму ' + str(self.total) + ' руб. (Пользователь: ' + user_name + ')'
 
-from src.models.mixins import LoggableMixin, ValidatableMixin, SerializableMixin
+# from src.models.mixins import LoggableMixin, ValidatableMixin, SerializableMixin
+#
+# class Order(ValidatableMixin, LoggableMixin, SerializableMixin):
+#     def __init__(self, order_id, total):
+#         self.order_id = order_id
+#         self.total = total
+#         self.log(f"Создан заказ: {order_id}")
+#     def validate(self):
+#         if self.total < 0:
+#             raise ValueError('Сумма не может быть отрицательной')
+#         return True
 
-class Order(ValidatableMixin, LoggableMixin, SerializableMixin):
+from src.models.metaclasses import ModelMeta
+
+class Order(metaclass = ModelMeta):
     def __init__(self, order_id, total):
         self.order_id = order_id
         self.total = total
-        self.log(f"Создан заказ: {order_id}")
-    def validate(self):
-        if self.total < 0:
-            raise ValueError('Сумма не может быть отрицательной')
-        return True
 

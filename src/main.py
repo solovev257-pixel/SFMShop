@@ -878,13 +878,35 @@
 #
 #
 
+# from src.models.product import Product
+# from src.models.order import Order
+#
+# product = Product("Ноутбук", 1000, 10)
+# print(product.is_valid())
+# print(product.to_json())
+#
+# order = Order(1, 5000)
+# print(order.is_valid())
+# print(order.to_json())
+
+from src.models.payment import Payment, CardPayment, PayPalPayment
+from src.services.payment_service import PostgreSQLPaymentRepository, EmailNotificationService, PaymentProcessor
+
+# payment = Payment(1, 1000, "card")
+# card = CardPayment()
+# repo = PostgreSQLPaymentRepository()
+# notif = EmailNotificationService()
+#
+# processor = PaymentProcessor(card, repo, notif)
+# result = processor.process_payment(payment)
+# print(result)
+
+
+from src.models.metaclasses import ModelMeta
 from src.models.product import Product
 from src.models.order import Order
+from src.models.user import User
 
-product = Product("Ноутбук", 1000, 10)
-print(product.is_valid())
-print(product.to_json())
-
-order = Order(1, 5000)
-print(order.is_valid())
-print(order.to_json())
+print("Зарегистрированные классы:")
+for name, cls in ModelMeta._registry.items():
+    print(f"  {name}: {cls}")
