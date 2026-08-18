@@ -140,10 +140,31 @@
 # seasonal_discount = SeasonalDiscount(15)
 # print(product.calculate_price(seasonal_discount))
 
-from src.models.metaclasses import ModelMeta
+# from src.models.metaclasses import ModelMeta
+#
+# class Product(metaclass = ModelMeta):
+#     def __init__(self, name, price, quantity):
+#         self.name = name
+#         self.price = price
+#         self.quantity = quantity
 
-class Product(metaclass = ModelMeta):
+from src.models.descriptors import PositiveNumber, CachedProperty
+
+
+class Product:
+    price = PositiveNumber("_price")
+    quantity = PositiveNumber("_quantity")
+
     def __init__(self, name, price, quantity):
         self.name = name
         self.price = price
         self.quantity = quantity
+
+    @CachedProperty
+    def total_value(self):
+        print("Вычисление total_value...")
+        return self.price * self.quantity
+
+product = Product("Ноутбук", 1000, 10)
+print(product.total_value)
+print(product.total_value)
