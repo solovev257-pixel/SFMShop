@@ -31,3 +31,32 @@ class CachedProperty:
         value = self.func(instance)
         setattr(instance, cache_attr, value)
         return value
+
+
+class EmailDescriptor:
+    def __init__(self, name):
+        self.name = name
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return getattr(instance, self.name)
+
+    def __set__(self, instance, value):
+        if "@" not in value:
+            raise ValueError("Email должен содержать @")
+        setattr(instance, self.name, value)
+
+class AgeDescriptor:
+    def __init__(self, name):
+        self.name = name
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return getattr(instance, self.name)
+
+    def __set__(self, instance, value):
+        if value < 18:
+            raise ValueError("Пользователь должен быть старше 18 лет")
+        setattr(instance, self.name, value)
