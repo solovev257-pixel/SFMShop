@@ -30,10 +30,21 @@
 #             raise ValueError('Сумма не может быть отрицательной')
 #         return True
 
-from src.models.metaclasses import ModelMeta
+# from src.models.metaclasses import ModelMeta
+#
+# class Order(metaclass = ModelMeta):
+#     def __init__(self, order_id, total):
+#         self.order_id = order_id
+#         self.total = total
 
-class Order(metaclass = ModelMeta):
-    def __init__(self, order_id, total):
+from src.models.mixins import LoggableMixin, SerializableMixin
+from src.models.descriptors import PositiveNumber
+
+
+class Order(LoggableMixin, SerializableMixin):
+    order_id = PositiveNumber("_order_id")
+
+    def __init__(self, order_id, items, user):
         self.order_id = order_id
-        self.total = total
-
+        self.items = items
+        self.user = user
