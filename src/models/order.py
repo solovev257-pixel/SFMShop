@@ -37,9 +37,20 @@
 #         self.order_id = order_id
 #         self.total = total
 
+# from src.models.mixins import LoggableMixin, SerializableMixin
+# from src.models.descriptors import PositiveNumber
+#
+#
+# class Order(LoggableMixin, SerializableMixin):
+#     order_id = PositiveNumber("_order_id")
+#
+#     def __init__(self, order_id, items, user):
+#         self.order_id = order_id
+#         self.items = items
+#         self.user = user
+
 from src.models.mixins import LoggableMixin, SerializableMixin
 from src.models.descriptors import PositiveNumber
-
 
 class Order(LoggableMixin, SerializableMixin):
     order_id = PositiveNumber("_order_id")
@@ -48,3 +59,17 @@ class Order(LoggableMixin, SerializableMixin):
         self.order_id = order_id
         self.items = items
         self.user = user
+        self.log(f"Создан заказ: {order_id}")
+
+    def __len__(self):
+        return len(self.items)
+
+    def __contains__(self, item):
+        return item in self.items
+
+    def __add__(self, other):
+        new_items = self.items + other.items
+        return Order(self.order_id, new_items)
+
+    def __lt__(self, other):
+        return self.order_id < other.order_id

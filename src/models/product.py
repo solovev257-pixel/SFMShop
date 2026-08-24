@@ -148,10 +148,31 @@
 #         self.price = price
 #         self.quantity = quantity
 
+# from src.models.descriptors import PositiveNumber, CachedProperty
+#
+#
+# class Product:
+#     price = PositiveNumber("_price")
+#     quantity = PositiveNumber("_quantity")
+#
+#     def __init__(self, name, price, quantity):
+#         self.name = name
+#         self.price = price
+#         self.quantity = quantity
+#
+#     @CachedProperty
+#     def total_value(self):
+#         print("Вычисление total_value...")
+#         return self.price * self.quantity
+#
+# product = Product("Ноутбук", 1000, 10)
+# print(product.total_value)
+# print(product.total_value)
+
 from src.models.descriptors import PositiveNumber, CachedProperty
+from src.models.mixins import SerializableMixin
 
-
-class Product:
+class Product(SerializableMixin):
     price = PositiveNumber("_price")
     quantity = PositiveNumber("_quantity")
 
@@ -162,9 +183,4 @@ class Product:
 
     @CachedProperty
     def total_value(self):
-        print("Вычисление total_value...")
         return self.price * self.quantity
-
-product = Product("Ноутбук", 1000, 10)
-print(product.total_value)
-print(product.total_value)

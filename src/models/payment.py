@@ -50,53 +50,71 @@
 # d.method()
 
 
+# from abc import ABC, abstractmethod
+#
+# class Payment:
+#     def __init__(self,order_id, amount, payment_method):
+#         self.order_id = order_id
+#         self.amount = amount
+#         self.payment_method = payment_method
+#         self.status = "pending"
+#
+# class PaymentMethod(ABC):
+#     @abstractmethod
+#     def process(self, amount):
+#         pass
+#
+#     @abstractmethod
+#     def calculate_fee(self, amount):
+#         pass
+#
+# class CardPayment(PaymentMethod):
+#     def calculate_fee(self, amount):
+#         if amount > 10000:
+#             return amount * 0.02
+#         else:
+#             return amount * 0.03
+#
+#     def process(self, amount):
+#         fee = self.calculate_fee(amount)
+#         total = amount + fee
+#         print (f"Списание с карты суммы {total}")
+#         return True
+#
+# class PayPalPayment(PaymentMethod):
+#     def calculate_fee(self, amount):
+#         return amount * 0.035
+#
+#     def process(self, amount):
+#         fee = self.calculate_fee(amount)
+#         total = amount + fee
+#         print (f"Списание с PayPal {total}")
+#         return True
+#
+# class BankTransferPayment(PaymentMethod):
+#     def calculate_fee(self, amount):
+#         return 50
+#
+#     def process(self, amount):
+#         fee = self.calculate_fee(amount)
+#         total = amount + fee
+#         print(f"Банковский перевод на сумму {total}")
+#         return True
+
+
 from abc import ABC, abstractmethod
+from src.models.mixins import LoggableMixin, SerializableMixin
 
-class Payment:
-    def __init__(self,order_id, amount, payment_method):
-        self.order_id = order_id
+class Payment(ABC):
+    @abstractmethod
+    def process(self):
+        pass
+
+class CardPayment(LoggableMixin, SerializableMixin, Payment):
+    def __init__(self, amount):
         self.amount = amount
-        self.payment_method = payment_method
-        self.status = "pending"
+        self.log(f"Создан платеж: {amount}")
 
-class PaymentMethod(ABC):
-    @abstractmethod
-    def process(self, amount):
-        pass
-
-    @abstractmethod
-    def calculate_fee(self, amount):
-        pass
-
-class CardPayment(PaymentMethod):
-    def calculate_fee(self, amount):
-        if amount > 10000:
-            return amount * 0.02
-        else:
-            return amount * 0.03
-
-    def process(self, amount):
-        fee = self.calculate_fee(amount)
-        total = amount + fee
-        print (f"Списание с карты суммы {total}")
-        return True
-
-class PayPalPayment(PaymentMethod):
-    def calculate_fee(self, amount):
-        return amount * 0.035
-
-    def process(self, amount):
-        fee = self.calculate_fee(amount)
-        total = amount + fee
-        print (f"Списание с PayPal {total}")
-        return True
-
-class BankTransferPayment(PaymentMethod):
-    def calculate_fee(self, amount):
-        return 50
-
-    def process(self, amount):
-        fee = self.calculate_fee(amount)
-        total = amount + fee
-        print(f"Банковский перевод на сумму {total}")
+    def process(self):
+        self.log("Обработка платежа")
         return True

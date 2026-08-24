@@ -889,7 +889,7 @@
 # print(order.is_valid())
 # print(order.to_json())
 
-from src.models.payment import Payment, CardPayment, PayPalPayment
+# from src.models.payment import Payment, CardPayment, PayPalPayment
 from src.services.payment_service import PostgreSQLPaymentRepository, EmailNotificationService, PaymentProcessor
 
 # payment = Payment(1, 1000, "card")
@@ -902,11 +902,41 @@ from src.services.payment_service import PostgreSQLPaymentRepository, EmailNotif
 # print(result)
 
 
-from src.models.metaclasses import ModelMeta
-from src.models.product import Product
-from src.models.order import Order
-from src.models.user import User
+# from src.models.metaclasses import ModelMeta
+# from src.models.product import Product
+# from src.models.order import Order
+# from src.models.user import User
+#
+# print("Зарегистрированные классы:")
+# for name, cls in ModelMeta._registry.items():
+#     print(f"  {name}: {cls}")
 
-print("Зарегистрированные классы:")
-for name, cls in ModelMeta._registry.items():
-    print(f"  {name}: {cls}")
+
+from src.models.product import Product
+from src.models.payment import CardPayment
+from src.models.delivery_strategy import StandardDelivery
+from src.models.order import Order
+
+
+def process_advanced_order_system():
+
+    product = Product("Ноутбук", 1000, 10)
+
+    delivery = StandardDelivery()
+    delivery_cost = delivery.calculate_cost(5.0)
+
+    payment = CardPayment(1000)
+    payment.process()
+
+    order = Order(1, ["Ноутбук", "Мышь"], "user1")
+    print(len(order))
+    print("Ноутбук" in order)
+
+    payment.log("Платеж обработан")
+
+    return {
+        "delivery_cost": delivery_cost,
+        "product": product.to_json()
+    }
+
+process_advanced_order_system()
