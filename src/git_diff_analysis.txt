@@ -1,0 +1,10 @@
+Анализ изменений между ветками проекта SFMShop
+
+feature/add-logging vs main:
+- Добавлен новый файл src/utils/logger.py
+- Создан класс Logger с методами log() и error()
+
+feature/add-caching vs main:
+- Добавлен новый файл src/utils/cache.py
+- Создан класс Cache с методами set() и get()
+- Добавлена документация git_workflow_summary.md

@@ -232,4 +232,5 @@ def benchmark_optimizations():
 
 
 if __name__ == "__main__":
-    benchmark_optimizations()
+    benchmark_opti
+    mizations()
