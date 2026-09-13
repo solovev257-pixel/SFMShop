@@ -90,43 +90,127 @@
 # if __name__ == "__main__":
 #     main()
 
+# from src.database.connection import get_connection
+#
+# def transfer_money(from_user_id, to_user_id, amount):
+#     with get_connection() as conn:
+#         try:
+#             with conn.cursor() as cur:
+#                 # есть ли нужная сумма на счету
+#                 cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
+#                 balance = cur.fetchone()[0]
+#                 if balance < amount:
+#                     raise ValueError("Недостаточно средств для перевода")
+#                 # списать
+#                 cur.execute(
+#                     "UPDATE users SET balance = balance - %s WHERE id = %s",
+#                     (amount, from_user_id)
+#                 )
+#                 # зачислить
+#                 cur.execute(
+#                     "UPDATE users SET balance = balance + %s WHERE id = %s",
+#                     (amount, to_user_id)
+#                 )
+#
+#                 # вторая проверка баланса что он не ущел в минус
+#                 cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
+#                 result = cur.fetchone()
+#                 if result[0] < 0:
+#                     raise ValueError("Ошибка: баланс стал отрицательным")
+#
+#                 return True
+#
+#         except Exception as e:
+#             conn.rollback()
+#             print(f"Ошибка при переводе денег: {e}")
+#             raise
+#
+# try:
+#     transfer_money(from_user_id=1, to_user_id=2, amount=500)
+#     print("Перевод выполнен успешно")
+# except ValueError as e:
+#     print(f"Ошибка: {e}")
+
+
+import psycopg2
+from psycopg2.extensions import (
+    ISOLATION_LEVEL_READ_COMMITTED,
+    ISOLATION_LEVEL_REPEATABLE_READ,
+    ISOLATION_LEVEL_SERIALIZABLE
+)
 from src.database.connection import get_connection
 
-def transfer_money(from_user_id, to_user_id, amount):
+def read_user_balance(user_id):
+    # READ COMMITTED — достаточно для простого чтения баланса
     with get_connection() as conn:
+        conn.set_isolation_level(ISOLATION_LEVEL_READ_COMMITTED)
+
+        with conn.cursor() as cur:
+            cur.execute("SELECT balance FROM users WHERE id = %s", (user_id,))
+            result = cur.fetchone()
+            return result[0] if result else 0
+
+def calculate_total_revenue(start_date, end_date):
+    # REPEATABLE READ — оба запроса должны видеть одинаковый снимок данных
+    with get_connection() as conn:
+        conn.set_isolation_level(ISOLATION_LEVEL_REPEATABLE_READ)
+
         try:
             with conn.cursor() as cur:
-                # есть ли нужная сумма на счету
-                cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
-                balance = cur.fetchone()[0]
-                if balance < amount:
-                    raise ValueError("Недостаточно средств для перевода")
-                # списать
-                cur.execute(
-                    "UPDATE users SET balance = balance - %s WHERE id = %s",
-                    (amount, from_user_id)
+                cur.execute("SELECT COALESCE(SUM(total), 0) FROM orders WHERE created_at BETWEEN %s AND %s",
+                            (start_date, end_date)
                 )
-                # зачислить
-                cur.execute(
-                    "UPDATE users SET balance = balance + %s WHERE id = %s",
-                    (amount, to_user_id)
-                )
+                total = cur.fetchone()[0]
 
-                # вторая проверка баланса что он не ущел в минус
+                cur.execute("SELECT COUNT(*) FROM orders WHERE created_at BETWEEN %s AND %s",
+                            (start_date, end_date)
+                            )
+                count = cur.fetchone()[0]
+
+                return{
+                    "total": float(total),
+                    "count": int(count),
+                    "average": float(total) / count if count else 0
+                }
+        except psycopg2.Error as e:
+            conn.rollback()
+            raise
+
+def critical_financial_operation(from_user_id, to_user_id, amount):
+    # SERIALIZABLE — полная изоляция для критических финансовых операций
+    with get_connection() as conn:
+        conn.set_isolation_level(ISOLATION_LEVEL_SERIALIZABLE)
+
+        try:
+            with conn.cursor() as cur:
                 cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
-                result = cur.fetchone()
-                if result[0] < 0:
-                    raise ValueError("Ошибка: баланс стал отрицательным")
+                row = cur.fetchone()
+                if row is None:
+                    raise ValueError("нет такого пользователя")
+                if row[0] < amount:
+                    raise ValueError("средств не достаточно")
+
+                cur.execute("UPDATE users SET balance = balance - %s WHERE id = %s",
+                            (amount, from_user_id))
+
+                cur.execute("UPDATE users SET balance = balance + %s WHERE id = %s",
+                            (amount, to_user_id))
 
                 return True
 
-        except Exception as e:
+        except psycopg2.Error as e:
             conn.rollback()
-            print(f"Ошибка при переводе денег: {e}")
+            raise
+        except ValueError as e:
+            conn.rollback()
             raise
 
-try:
-    transfer_money(from_user_id=1, to_user_id=2, amount=500)
-    print("Перевод выполнен успешно")
-except ValueError as e:
-    print(f"Ошибка: {e}")
+print(read_user_balance(1))
+
+
+
+
+
+
+
+
