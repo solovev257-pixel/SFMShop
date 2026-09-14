@@ -90,46 +90,32 @@
 # if __name__ == "__main__":
 #     main()
 
-# from src.database.connection import get_connection
-#
-# def transfer_money(from_user_id, to_user_id, amount):
-#     with get_connection() as conn:
-#         try:
-#             with conn.cursor() as cur:
-#                 # есть ли нужная сумма на счету
-#                 cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
-#                 balance = cur.fetchone()[0]
-#                 if balance < amount:
-#                     raise ValueError("Недостаточно средств для перевода")
-#                 # списать
-#                 cur.execute(
-#                     "UPDATE users SET balance = balance - %s WHERE id = %s",
-#                     (amount, from_user_id)
-#                 )
-#                 # зачислить
-#                 cur.execute(
-#                     "UPDATE users SET balance = balance + %s WHERE id = %s",
-#                     (amount, to_user_id)
-#                 )
-#
-#                 # вторая проверка баланса что он не ущел в минус
-#                 cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
-#                 result = cur.fetchone()
-#                 if result[0] < 0:
-#                     raise ValueError("Ошибка: баланс стал отрицательным")
-#
-#                 return True
-#
-#         except Exception as e:
-#             conn.rollback()
-#             print(f"Ошибка при переводе денег: {e}")
-#             raise
-#
-# try:
-#     transfer_money(from_user_id=1, to_user_id=2, amount=500)
-#     print("Перевод выполнен успешно")
-# except ValueError as e:
-#     print(f"Ошибка: {e}")
+from src.database.connection import get_connection
+
+# АНАЛИЗ ACID — старая версия transfer_money
+def transfer_money(from_user_id, to_user_id, amount):
+    with get_connection() as conn:
+        try:
+            with conn.cursor() as cur:
+                # C - Consistency: проверка баланса ДО операции
+                cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
+                balance = cur.fetchone()[0]
+                if balance < amount:
+                    raise ValueError("Недостаточно средств для перевода")
+                # A - Atomicity: все операции в одной транзакции
+                cur.execute("UPDATE users SET balance = balance - %s WHERE id = %s", (amount, from_user_id))
+                cur.execute("UPDATE users SET balance = balance + %s WHERE id = %s", (amount, to_user_id))
+                # C - Consistency: проверка баланса ПОСЛЕ операции
+                cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
+                if cur.fetchone()[0] < 0:
+                    raise ValueError("Баланс отрицательный")
+                # I - Isolation: уровень изоляции не установлен
+                # D - Durability: commit() автоматически
+                return True
+        except Exception as e:
+            # A - Atomicity: rollback() при ошибке
+            conn.rollback()
+            raise
 
 
 import psycopg2
@@ -178,11 +164,13 @@ def calculate_total_revenue(start_date, end_date):
 
 def critical_financial_operation(from_user_id, to_user_id, amount):
     # SERIALIZABLE — полная изоляция для критических финансовых операций
+    # I - Isolation: установка уровня изоляции
     with get_connection() as conn:
         conn.set_isolation_level(ISOLATION_LEVEL_SERIALIZABLE)
 
         try:
             with conn.cursor() as cur:
+                # C - Consistency: проверка согласованности ДО операци
                 cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
                 row = cur.fetchone()
                 if row is None:
@@ -190,12 +178,18 @@ def critical_financial_operation(from_user_id, to_user_id, amount):
                 if row[0] < amount:
                     raise ValueError("средств не достаточно")
 
+                # A - Atomicity: все операции в одной транзакции
+
                 cur.execute("UPDATE users SET balance = balance - %s WHERE id = %s",
                             (amount, from_user_id))
 
                 cur.execute("UPDATE users SET balance = balance + %s WHERE id = %s",
                             (amount, to_user_id))
-
+                # C - Consistency: проверка баланса после списания
+                cur.execute("SELECT balance FROM users WHERE id = %s",(from_user_id,))
+                if cur.fetchone()[0] < 0:
+                    raise ValueError("Баланс отрицательный")
+                # D - Durability: commit() вызывается автоматически
                 return True
 
         except psycopg2.Error as e:
