@@ -93,113 +93,182 @@
 from src.database.connection import get_connection
 
 # АНАЛИЗ ACID — старая версия transfer_money
-def transfer_money(from_user_id, to_user_id, amount):
-    with get_connection() as conn:
-        try:
-            with conn.cursor() as cur:
-                # C - Consistency: проверка баланса ДО операции
-                cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
-                balance = cur.fetchone()[0]
-                if balance < amount:
-                    raise ValueError("Недостаточно средств для перевода")
-                # A - Atomicity: все операции в одной транзакции
-                cur.execute("UPDATE users SET balance = balance - %s WHERE id = %s", (amount, from_user_id))
-                cur.execute("UPDATE users SET balance = balance + %s WHERE id = %s", (amount, to_user_id))
-                # C - Consistency: проверка баланса ПОСЛЕ операции
-                cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
-                if cur.fetchone()[0] < 0:
-                    raise ValueError("Баланс отрицательный")
-                # I - Isolation: уровень изоляции не установлен
-                # D - Durability: commit() автоматически
-                return True
-        except Exception as e:
-            # A - Atomicity: rollback() при ошибке
-            conn.rollback()
-            raise
+# def transfer_money(from_user_id, to_user_id, amount):
+#     with get_connection() as conn:
+#         try:
+#             with conn.cursor() as cur:
+#                 # C - Consistency: проверка баланса ДО операции
+#                 cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
+#                 balance = cur.fetchone()[0]
+#                 if balance < amount:
+#                     raise ValueError("Недостаточно средств для перевода")
+#                 # A - Atomicity: все операции в одной транзакции
+#                 cur.execute("UPDATE users SET balance = balance - %s WHERE id = %s", (amount, from_user_id))
+#                 cur.execute("UPDATE users SET balance = balance + %s WHERE id = %s", (amount, to_user_id))
+#                 # C - Consistency: проверка баланса ПОСЛЕ операции
+#                 cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
+#                 if cur.fetchone()[0] < 0:
+#                     raise ValueError("Баланс отрицательный")
+#                 # I - Isolation: уровень изоляции не установлен
+#                 # D - Durability: commit() автоматически
+#                 return True
+#         except Exception as e:
+#             # A - Atomicity: rollback() при ошибке
+#             conn.rollback()
+#             raise
+#
+#
+# import psycopg2
+# from psycopg2.extensions import (
+#     ISOLATION_LEVEL_READ_COMMITTED,
+#     ISOLATION_LEVEL_REPEATABLE_READ,
+#     ISOLATION_LEVEL_SERIALIZABLE
+# )
+# from src.database.connection import get_connection
+#
+# def read_user_balance(user_id):
+#     # READ COMMITTED — достаточно для простого чтения баланса
+#     with get_connection() as conn:
+#         conn.set_isolation_level(ISOLATION_LEVEL_READ_COMMITTED)
+#
+#         with conn.cursor() as cur:
+#             cur.execute("SELECT balance FROM users WHERE id = %s", (user_id,))
+#             result = cur.fetchone()
+#             return result[0] if result else 0
+#
+# def calculate_total_revenue(start_date, end_date):
+#     # REPEATABLE READ — оба запроса должны видеть одинаковый снимок данных
+#     with get_connection() as conn:
+#         conn.set_isolation_level(ISOLATION_LEVEL_REPEATABLE_READ)
+#
+#         try:
+#             with conn.cursor() as cur:
+#                 cur.execute("SELECT COALESCE(SUM(total), 0) FROM orders WHERE created_at BETWEEN %s AND %s",
+#                             (start_date, end_date)
+#                 )
+#                 total = cur.fetchone()[0]
+#
+#                 cur.execute("SELECT COUNT(*) FROM orders WHERE created_at BETWEEN %s AND %s",
+#                             (start_date, end_date)
+#                             )
+#                 count = cur.fetchone()[0]
+#
+#                 return{
+#                     "total": float(total),
+#                     "count": int(count),
+#                     "average": float(total) / count if count else 0
+#                 }
+#         except psycopg2.Error as e:
+#             conn.rollback()
+#             raise
+#
+# def critical_financial_operation(from_user_id, to_user_id, amount):
+#     # SERIALIZABLE — полная изоляция для критических финансовых операций
+#     # I - Isolation: установка уровня изоляции
+#     with get_connection() as conn:
+#         conn.set_isolation_level(ISOLATION_LEVEL_SERIALIZABLE)
+#
+#         try:
+#             with conn.cursor() as cur:
+#                 # C - Consistency: проверка согласованности ДО операци
+#                 cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
+#                 row = cur.fetchone()
+#                 if row is None:
+#                     raise ValueError("нет такого пользователя")
+#                 if row[0] < amount:
+#                     raise ValueError("средств не достаточно")
+#
+#                 # A - Atomicity: все операции в одной транзакции
+#
+#                 cur.execute("UPDATE users SET balance = balance - %s WHERE id = %s",
+#                             (amount, from_user_id))
+#
+#                 cur.execute("UPDATE users SET balance = balance + %s WHERE id = %s",
+#                             (amount, to_user_id))
+#                 # C - Consistency: проверка баланса после списания
+#                 cur.execute("SELECT balance FROM users WHERE id = %s",(from_user_id,))
+#                 if cur.fetchone()[0] < 0:
+#                     raise ValueError("Баланс отрицательный")
+#                 # D - Durability: commit() вызывается автоматически
+#                 return True
+#
+#         except psycopg2.Error as e:
+#             conn.rollback()
+#             raise
+#         except ValueError as e:
+#             conn.rollback()
+#             raise
+#
+# print(read_user_balance(1))
 
 
-import psycopg2
-from psycopg2.extensions import (
-    ISOLATION_LEVEL_READ_COMMITTED,
-    ISOLATION_LEVEL_REPEATABLE_READ,
-    ISOLATION_LEVEL_SERIALIZABLE
-)
+import time
 from src.database.connection import get_connection
 
-def read_user_balance(user_id):
-    # READ COMMITTED — достаточно для простого чтения баланса
-    with get_connection() as conn:
-        conn.set_isolation_level(ISOLATION_LEVEL_READ_COMMITTED)
+def measure_index_performance():
 
+# Измерение производительности запросов с индексами
+
+    with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT balance FROM users WHERE id = %s", (user_id,))
+            print("Тест 1 поиск товара по названию")
+
+        # Без индекса
+
+            start_time = time.perf_counter()
+            cur.execute("SELECT * FROM products WHERE name = %s", ("Ноутбук",))
             result = cur.fetchone()
-            return result[0] if result else 0
+            time_without_index = time.perf_counter() - start_time
 
-def calculate_total_revenue(start_date, end_date):
-    # REPEATABLE READ — оба запроса должны видеть одинаковый снимок данных
-    with get_connection() as conn:
-        conn.set_isolation_level(ISOLATION_LEVEL_REPEATABLE_READ)
+            # Создание индекса
 
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT COALESCE(SUM(total), 0) FROM orders WHERE created_at BETWEEN %s AND %s",
-                            (start_date, end_date)
-                )
-                total = cur.fetchone()[0]
+            cur.execute("CREATE INDEX IF NOT EXISTS index_product_name ON products(name)")
+            conn.commit()
 
-                cur.execute("SELECT COUNT(*) FROM orders WHERE created_at BETWEEN %s AND %s",
-                            (start_date, end_date)
-                            )
-                count = cur.fetchone()[0]
+            # С индексом
 
-                return{
-                    "total": float(total),
-                    "count": int(count),
-                    "average": float(total) / count if count else 0
-                }
-        except psycopg2.Error as e:
-            conn.rollback()
-            raise
+            start_time = time.perf_counter()
+            cur.execute("SELECT * FROM products WHERE name = %s", ("Ноутбук",))
+            result = cur.fetchone()
+            time_with_index = time.perf_counter() - start_time
 
-def critical_financial_operation(from_user_id, to_user_id, amount):
-    # SERIALIZABLE — полная изоляция для критических финансовых операций
-    # I - Isolation: установка уровня изоляции
-    with get_connection() as conn:
-        conn.set_isolation_level(ISOLATION_LEVEL_SERIALIZABLE)
+            # Результаты
 
-        try:
-            with conn.cursor() as cur:
-                # C - Consistency: проверка согласованности ДО операци
-                cur.execute("SELECT balance FROM users WHERE id = %s", (from_user_id,))
-                row = cur.fetchone()
-                if row is None:
-                    raise ValueError("нет такого пользователя")
-                if row[0] < amount:
-                    raise ValueError("средств не достаточно")
+            print(f"без индекса: {time_without_index:.6f} c")
+            print(f"с индексом: {time_with_index:.6f} с")
+            if time_with_index > 0:
+                speedup = time_without_index / time_with_index
+                print(f"ускорение: {speedup:.2f}x")
 
-                # A - Atomicity: все операции в одной транзакции
+            print("Тест 2: Поиск заказов по пользователю")
 
-                cur.execute("UPDATE users SET balance = balance - %s WHERE id = %s",
-                            (amount, from_user_id))
+            # Без индекса
+            start_time = time.perf_counter()
+            cur.execute("SELECT * FROM orders WHERE user_id = %s", (1,))
+            results = cur.fetchall()
+            time_without_index = time.perf_counter() - start_time
 
-                cur.execute("UPDATE users SET balance = balance + %s WHERE id = %s",
-                            (amount, to_user_id))
-                # C - Consistency: проверка баланса после списания
-                cur.execute("SELECT balance FROM users WHERE id = %s",(from_user_id,))
-                if cur.fetchone()[0] < 0:
-                    raise ValueError("Баланс отрицательный")
-                # D - Durability: commit() вызывается автоматически
-                return True
+            # Создание индекса
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)")
+            conn.commit()
 
-        except psycopg2.Error as e:
-            conn.rollback()
-            raise
-        except ValueError as e:
-            conn.rollback()
-            raise
+            # С индексом
+            start_time = time.perf_counter()
+            cur.execute("SELECT * FROM orders WHERE user_id = %s", (1,))
+            results = cur.fetchall()
+            time_with_index = time.perf_counter() - start_time
 
-print(read_user_balance(1))
+            print(f"без индекса: {time_without_index:.6f} с")
+            print(f"с индексом: {time_with_index:.6f} с")
+            if time_with_index > 0:
+                speedup = time_without_index / time_with_index
+                print(f"ускорение: {speedup:.2f}x")
+
+# тест
+if __name__ == "__main__":
+    measure_index_performance()
+
+
 
 
 
