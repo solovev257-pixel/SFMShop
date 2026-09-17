@@ -201,75 +201,92 @@ from src.database.connection import get_connection
 #
 # print(read_user_balance(1))
 
+# индексы для ускорения запросов
+# idx_products_name на products(name) — для поиска товаров по названию
+# idx_orders_user_id на orders(user_id) — для поиска заказов по пользователю
+# idx_order_items_order_id и idx_order_items_product_id — для JOIN через order_items
+# отдельный индекс на products.id не нужен — PRIMARY KEY уже создаёт его автоматически
 
-import time
-from src.database.connection import get_connection
+# import time
+# from src.database.connection import get_connection
+#
+# def measure_index_performance():
+#
+# # Измерение производительности запросов с индексами
+#
+#     with get_connection() as conn:
+#         with conn.cursor() as cur:
+#             print("Тест 1 поиск товара по названию")
+#
+#         # Без индекса
+#
+#             start_time = time.perf_counter()
+#             cur.execute("SELECT * FROM products WHERE name = %s", ("Ноутбук",))
+#             result = cur.fetchone()
+#             time_without_index = time.perf_counter() - start_time
+#
+#             # Создание индекса
+#
+#             cur.execute("CREATE INDEX IF NOT EXISTS index_product_name ON products(name)")
+#             conn.commit()
+#
+#             # С индексом
+#
+#             start_time = time.perf_counter()
+#             cur.execute("SELECT * FROM products WHERE name = %s", ("Ноутбук",))
+#             result = cur.fetchone()
+#             time_with_index = time.perf_counter() - start_time
+#
+#             # Результаты
+#
+#             print(f"без индекса: {time_without_index:.6f} c")
+#             print(f"с индексом: {time_with_index:.6f} с")
+#             if time_with_index > 0:
+#                 speedup = time_without_index / time_with_index
+#                 print(f"ускорение: {speedup:.2f}x")
+#
+#             print("Тест 2: Поиск заказов по пользователю")
+#
+#             # Без индекса
+#             start_time = time.perf_counter()
+#             cur.execute("SELECT * FROM orders WHERE user_id = %s", (1,))
+#             results = cur.fetchall()
+#             time_without_index = time.perf_counter() - start_time
+#
+#             # Создание индекса
+#             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)")
+#             conn.commit()
+#
+#             # С индексом
+#             start_time = time.perf_counter()
+#             cur.execute("SELECT * FROM orders WHERE user_id = %s", (1,))
+#             results = cur.fetchall()
+#             time_with_index = time.perf_counter() - start_time
+#
+#             print(f"без индекса: {time_without_index:.6f} с")
+#             print(f"с индексом: {time_with_index:.6f} с")
+#             if time_with_index > 0:
+#                 speedup = time_without_index / time_with_index
+#                 print(f"ускорение: {speedup:.2f}x")
+#
+# # тест
+# if __name__ == "__main__":
+#     measure_index_performance()
 
-def measure_index_performance():
 
-# Измерение производительности запросов с индексами
-
+def get_user_orders_with_products(user_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
-            print("Тест 1 поиск товара по названию")
-
-        # Без индекса
-
-            start_time = time.perf_counter()
-            cur.execute("SELECT * FROM products WHERE name = %s", ("Ноутбук",))
-            result = cur.fetchone()
-            time_without_index = time.perf_counter() - start_time
-
-            # Создание индекса
-
-            cur.execute("CREATE INDEX IF NOT EXISTS index_product_name ON products(name)")
-            conn.commit()
-
-            # С индексом
-
-            start_time = time.perf_counter()
-            cur.execute("SELECT * FROM products WHERE name = %s", ("Ноутбук",))
-            result = cur.fetchone()
-            time_with_index = time.perf_counter() - start_time
-
-            # Результаты
-
-            print(f"без индекса: {time_without_index:.6f} c")
-            print(f"с индексом: {time_with_index:.6f} с")
-            if time_with_index > 0:
-                speedup = time_without_index / time_with_index
-                print(f"ускорение: {speedup:.2f}x")
-
-            print("Тест 2: Поиск заказов по пользователю")
-
-            # Без индекса
-            start_time = time.perf_counter()
-            cur.execute("SELECT * FROM orders WHERE user_id = %s", (1,))
-            results = cur.fetchall()
-            time_without_index = time.perf_counter() - start_time
-
-            # Создание индекса
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)")
-            conn.commit()
-
-            # С индексом
-            start_time = time.perf_counter()
-            cur.execute("SELECT * FROM orders WHERE user_id = %s", (1,))
-            results = cur.fetchall()
-            time_with_index = time.perf_counter() - start_time
-
-            print(f"без индекса: {time_without_index:.6f} с")
-            print(f"с индексом: {time_with_index:.6f} с")
-            if time_with_index > 0:
-                speedup = time_without_index / time_with_index
-                print(f"ускорение: {speedup:.2f}x")
-
-# тест
-if __name__ == "__main__":
-    measure_index_performance()
-
-
-
+            # Запрос использует индексы для быстрого выполнения
+            cur.execute("""
+                SELECT o.id, o.total, p.name, p.price
+                FROM orders o
+                JOIN order_items oi ON o.id = oi.order_id
+                JOIN products p ON oi.product_id = p.id
+                WHERE o.user_id = %s
+            """, (user_id,))
+            return cur.fetchall()
+print(get_user_orders_with_products(1))
 
 
 
