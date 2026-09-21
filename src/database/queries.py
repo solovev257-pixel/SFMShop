@@ -274,19 +274,70 @@ from src.database.connection import get_connection
 #     measure_index_performance()
 
 
-def get_user_orders_with_products(user_id):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            # Запрос использует индексы для быстрого выполнения
-            cur.execute("""
-                SELECT o.id, o.total, p.name, p.price
-                FROM orders o
-                JOIN order_items oi ON o.id = oi.order_id
-                JOIN products p ON oi.product_id = p.id
-                WHERE o.user_id = %s
-            """, (user_id,))
-            return cur.fetchall()
-print(get_user_orders_with_products(1))
+# def get_user_orders_with_products(user_id):
+#     with get_connection() as conn:
+#         with conn.cursor() as cur:
+#             # Запрос использует индексы для быстрого выполнения
+#             cur.execute("""
+#                 SELECT o.id, o.total, p.name, p.price
+#                 FROM orders o
+#                 JOIN order_items oi ON o.id = oi.order_id
+#                 JOIN products p ON oi.product_id = p.id
+#                 WHERE o.user_id = %s
+#             """, (user_id,))
+#             return cur.fetchall()
+# print(get_user_orders_with_products(1))
+
+
+
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
+from src.database.models import User, Order, get_session
+
+def get_user_orders(user_id):
+    session = get_session()
+    try:
+        stmt = select(User).options(joinedload(User.orders)).where(User.id == user_id)
+        user = session.execute(stmt).unique().scalar_one_or_none()
+        if user:
+            return [{
+                "id": order.id,
+                "total": float(order.total),
+                "created_at": order.created_at.isoformat()
+            } for order in user.orders]
+        return []
+    finally:
+        session.close()
+
+
+def create_order(user_id, total):
+    session = get_session()
+    try:
+        order = Order(user_id=user_id, total=total)
+        session.add(order)
+        session.commit()
+        order_id = order.id
+        return order_id
+    except Exception as e:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def get_all_orders_with_users():
+    session = get_session()
+    try:
+        stmt = select(Order).options(joinedload(Order.user))
+        orders = session.execute(stmt).scalars().unique().all()
+        return [{
+            "id": order.id,
+            "total": float(order.total),
+            "user_name": order.user.name,
+            "user_email": order.user.email
+        } for order in orders]
+    finally:
+        session.close()
 
 
 
