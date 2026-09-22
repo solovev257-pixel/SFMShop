@@ -339,6 +339,22 @@ def get_all_orders_with_users():
     finally:
         session.close()
 
+def get_all_products_from_db():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name, price, quantity FROM products")
+            rows = cur.fetchall()
+            return [{"id": r[0], "name": r[1], "price": float(r[2]), "quantity": r[3]} for r in rows]
+
+def get_product_by_id_from_db(product_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name, price, quantity FROM products WHERE id = %s", (product_id,))
+            r = cur.fetchone()
+            if r:
+                return {"id": r[0], "name": r[1], "price": float(r[2]), "quantity": r[3]}
+            return None
+
 
 
 
