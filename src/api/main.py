@@ -224,12 +224,18 @@ import asyncio
 import json
 from contextlib import asynccontextmanager
 
+import logging
+
 import aiohttp
 import asyncpg
 import redis.asyncio as aioredis
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, status
+from pydantic import BaseModel, Field
 
 from src.database.async_repository import DB_CONFIG, ProductRepository
+from src.services.async_service import process_orders_async
+
+logger = logging.getLogger(__name__)
 
 REVIEWS_API_URL = "https://api.reviews.sfmshop.ru/product"
 REVIEWS_CACHE_TTL = 600  # 10 минут
@@ -302,3 +308,35 @@ async def get_product_full(product_id: int):
 
 
 
+class OrdersRequest(BaseModel):
+    """Тело запроса: список id заказов, от 1 до 1000 штук"""
+    order_ids: list[int] = Field(min_length=1, max_length=1000)
+
+
+@app.post("/orders/process")
+async def process_orders_endpoint(request: OrdersRequest):
+    """Обработать заказы параллельно и сразу вернуть итог"""
+    try:
+        results = await process_orders_async(request.order_ids)
+    except Exception as error:
+        logger.exception("Сбой при обработке заказов")
+        raise HTTPException(status_code=500, detail="Не удалось обработать заказы") from error
+
+    failed = [result for result in results if result["status"] == "failed"]
+    return {
+        "status": "success" if not failed else "partial",
+        "processed": len(results) - len(failed),
+        "failed": len(failed),
+        "results": results,
+    }
+
+
+@app.post("/orders/process-background", status_code=status.HTTP_202_ACCEPTED)
+async def process_orders_background(request: OrdersRequest, background_tasks: BackgroundTasks):
+    """Принять заказы и обработать их в фоне, уже после ответа"""
+    background_tasks.add_task(process_orders_async, request.order_ids)
+    return {
+        "status": "accepted",
+        "orders": len(request.order_ids),
+        "message": "Обработка заказов запущена в фоне",
+    }
