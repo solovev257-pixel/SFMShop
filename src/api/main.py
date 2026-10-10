@@ -181,46 +181,124 @@
 import time
 from datetime import datetime, timedelta
 
-class Order:
-    def __init__(self, id, created_at, total):
-        self.id = id
-        self.created_at = created_at
-        self.total =  total
-base_date = datetime(2026, 1, 1)
-orders = [Order(i, base_date + timedelta(days = i), i * 100) for i in range(1000)]
+# class Order:
+#     def __init__(self, id, created_at, total):
+#         self.id = id
+#         self.created_at = created_at
+#         self.total =  total
+# base_date = datetime(2026, 1, 1)
+# orders = [Order(i, base_date + timedelta(days = i), i * 100) for i in range(1000)]
+#
+# import random
+# random.shuffle(orders)
+#
+# def bubble_sort(orders):
+#     orders = orders.copy()
+#     n = len(orders)
+#     for i in range(n):
+#         for j in range(n -  i - 1):
+#             if orders[j].created_at > orders[j +1].created_at:
+#                 orders[j], orders[j +1] = orders[j +1], orders[j]
+#     return orders
+#
+# def sorted_orders(orders):
+#     return sorted(orders, key=lambda x: x.created_at)
+#
+# def compare_sorting(orders):
+#     start_time = time.perf_counter()
+#     bubble_sort(orders)
+#     time_bubble = time.perf_counter() - start_time
+#     start_time = time.perf_counter()
+#     sorted_orders(orders)
+#     time_sorted = time.perf_counter() - start_time
+#     speedup = time_bubble / time_sorted
+#
+#     print(f"Пузырьковая сортировка: {time_bubble:.4f} секунд")
+#     print(f"Метод sorted(): {time_sorted:.4f} секунд")
+#     print(f"Ускорение: {speedup:.2f}x")
+#
+# if __name__ == "__main__":
+#     compare_sorting(orders)
 
-import random
-random.shuffle(orders)
+import asyncio
+import json
+from contextlib import asynccontextmanager
 
-def bubble_sort(orders):
-    orders = orders.copy()
-    n = len(orders)
-    for i in range(n):
-        for j in range(n -  i - 1):
-            if orders[j].created_at > orders[j +1].created_at:
-                orders[j], orders[j +1] = orders[j +1], orders[j]
-    return orders
+import aiohttp
+import asyncpg
+import redis.asyncio as aioredis
+from fastapi import FastAPI, HTTPException
 
-def sorted_orders(orders):
-    return sorted(orders, key=lambda x: x.created_at)
+from src.database.async_repository import DB_CONFIG, ProductRepository
 
-def compare_sorting(orders):
-    start_time = time.perf_counter()
-    bubble_sort(orders)
-    time_bubble = time.perf_counter() - start_time
-    start_time = time.perf_counter()
-    sorted_orders(orders)
-    time_sorted = time.perf_counter() - start_time
-    speedup = time_bubble / time_sorted
+REVIEWS_API_URL = "https://api.reviews.sfmshop.ru/product"
+REVIEWS_CACHE_TTL = 600  # 10 минут
 
-    print(f"Пузырьковая сортировка: {time_bubble:.4f} секунд")
-    print(f"Метод sorted(): {time_sorted:.4f} секунд")
-    print(f"Ускорение: {speedup:.2f}x")
-
-if __name__ == "__main__":
-    compare_sorting(orders)
+resources: dict = {}
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Открываем пул БД, Redis и HTTP-сессию на старте, закрываем при остановке"""
+    resources["pool"] = await asyncpg.create_pool(**DB_CONFIG, min_size=1, max_size=5)
+    resources["redis"] = aioredis.from_url("redis://localhost:6379", decode_responses=True)
+    resources["http"] = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3))
+
+    yield
+
+    await resources["http"].close()
+    await resources["redis"].aclose()
+    await resources["pool"].close()
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+async def load_product(product_id: int) -> dict | None:
+    """Товар из PostgreSQL через репозиторий"""
+    repository = ProductRepository(resources["pool"])
+    return await repository.get_by_id(product_id)
+
+
+async def load_reviews(product_id: int) -> list:
+    """Отзывы: сначала ищем в кэше Redis, если нет - идём во внешний API"""
+    cache_key = f"cache:reviews:{product_id}"
+
+    cached_reviews = await resources["redis"].get(cache_key)
+    if cached_reviews is not None:
+        return json.loads(cached_reviews)
+
+    try:
+        async with resources["http"].get(f"{REVIEWS_API_URL}/{product_id}") as response:
+            response.raise_for_status()
+            reviews = await response.json()
+    except (aiohttp.ClientError, asyncio.TimeoutError):
+        # Сервис отзывов недоступен - отдаём товар без отзывов
+        return []
+
+    await resources["redis"].setex(cache_key, REVIEWS_CACHE_TTL, json.dumps(reviews))
+    return reviews
+
+
+async def count_view(product_id: int) -> int:
+    """Счётчик просмотров: incr в Redis атомарный, гонки нет"""
+    return await resources["redis"].incr(f"views:product:{product_id}")
+
+
+@app.get("/products/{product_id}/full")
+async def get_product_full(product_id: int):
+    """Товар, отзывы и просмотры - три источника параллельно"""
+    product, reviews, views = await asyncio.gather(
+        load_product(product_id),
+        load_reviews(product_id),
+        count_view(product_id),
+    )
+
+    if product is None:
+        raise HTTPException(status_code=404, detail="Товар не найден")
+
+    product["price"] = float(product["price"])
+    return {**product, "reviews": reviews, "views": views}
 
 
 

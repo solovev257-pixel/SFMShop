@@ -1,2 +1,5 @@
 aiohttp
 asyncpg
+fastapi
+uvicorn
+redis>=5,<8
