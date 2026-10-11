@@ -1,235 +1,12 @@
-# from contextlib import asynccontextmanager
-# from typing import Optional
-# from fastapi import FastAPI, HTTPException
-# from fastapi.testclient import TestClient
-# from pydantic import BaseModel
-# from src.database.connection import connect_to_db, get_all_products, get_user_by_id, create_order as save_order
-# from src.models.product import Product
-# from src.models.order import Order
-#
-#
-# class OrderCreate(BaseModel):
-#     user_id: int
-#     product_id: int
-#     quantity: int
-#
-#
-# class ProductUpdate(BaseModel):
-#     name: Optional[str] = None
-#     price: Optional[float] = None
-#     quantity: Optional[int] = None
-#
-#
-# conn = None
-#
-#
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     global conn
-#     conn = connect_to_db()
-#     yield
-#     if conn:
-#         conn.close()
-#
-#
-# app = FastAPI(lifespan=lifespan)
-#
-#
-# @app.get("/products")
-# def get_products(limit: int = 10, offset: int = 0):
-#     try:
-#         products_data = get_all_products(conn)
-#         products = []
-#         for data in products_data:
-#             product = Product(data[1], data[2], data[3])
-#             product.id = data[0]
-#             products.append(product.__dict__)
-#         total = len(products)
-#         paginated_products = products[offset:offset + limit]
-#         return {
-#             "total": total,
-#             "limit": limit,
-#             "offset": offset,
-#             "products": paginated_products
-#         }
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-#
-#
-# @app.get("/products/{product_id}")
-# def get_product(product_id: int):
-#     try:
-#         products_data = get_all_products(conn)
-#         for data in products_data:
-#             if data[0] == product_id:
-#                 product = Product(data[1], data[2], data[3])
-#                 product.id = data[0]
-#                 return product.__dict__
-#         raise HTTPException(status_code=404, detail="Товар не найден")
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-#
-#
-# @app.post("/orders", status_code=201)
-# def create_order(order: OrderCreate):
-#     try:
-#         user = get_user_by_id(conn, order.user_id)
-#         if user is None:
-#             raise HTTPException(status_code=404, detail="Пользователь не найден")
-#         product_row = None
-#         for data in get_all_products(conn):
-#             if data[0] == order.product_id:
-#                 product_row = data
-#                 break
-#         if product_row is None:
-#             raise HTTPException(status_code=404, detail="Товар не найден")
-#         product = Product(product_row[1], product_row[2], order.quantity)
-#         new_order = Order(user, [product])
-#         save_order(conn, order.user_id, new_order.total)
-#         return {
-#             "user_id": order.user_id,
-#             "product_id": order.product_id,
-#             "quantity": order.quantity,
-#             "total": new_order.total,
-#             "message": "Заказ создан"
-#         }
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-#
-#
-# @app.put("/products/{product_id}")
-# def update_product(product_id: int, product_data: ProductUpdate):
-#     try:
-#         products_data = get_all_products(conn)
-#         found = False
-#         for data in products_data:
-#             if data[0] == product_id:
-#                 found = True
-#                 break
-#         if not found:
-#             raise HTTPException(status_code=404, detail="Товар не найден")
-#         return {"id": product_id, "message": "Товар обновлен"}
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-#
-#
-# @app.delete("/products/{product_id}")
-# def delete_product(product_id: int):
-#     try:
-#         products_data = get_all_products(conn)
-#         found = False
-#         for data in products_data:
-#             if data[0] == product_id:
-#                 found = True
-#                 break
-#         if not found:
-#             raise HTTPException(status_code=404, detail="Товар не найден")
-#         return {"message": "Товар удален"}
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-#
-#
-# def test_api():
-#     client = TestClient(app)
-#     response = client.get("/products")
-#     assert response.status_code == 200
-#     print("GET /products: OK")
-#     response = client.get("/products?limit=5&offset=0")
-#     assert response.status_code == 200
-#     data = response.json()
-#     assert "total" in data
-#     assert "products" in data
-#     print("GET /products с пагинацией: OK")
-#     response = client.get("/products/1")
-#     assert response.status_code == 200
-#     print("GET /products/1: OK")
-#     response = client.get("/products/999")
-#     assert response.status_code == 404
-#     print("GET /products/999 (404): OK")
-#     response = client.post("/orders", json={
-#         "user_id": 1,
-#         "product_id": 2,
-#         "quantity": 1
-#     })
-#     assert response.status_code == 201
-#     print("POST /orders: OK")
-#     response = client.put("/products/1", json={
-#         "name": "Ноутбук обновленный",
-#         "price": 45000
-#     })
-#     assert response.status_code == 200
-#     print("PUT /products/1: OK")
-#     response = client.delete("/products/1")
-#     assert response.status_code == 200
-#     print("DELETE /products/1: OK")
-#     print("\nВсе тесты пройдены успешно!")
-#
-#
-# if __name__ == "__main__":
-#     test_api()
-
-
-
-import time
-from datetime import datetime, timedelta
-
-# class Order:
-#     def __init__(self, id, created_at, total):
-#         self.id = id
-#         self.created_at = created_at
-#         self.total =  total
-# base_date = datetime(2026, 1, 1)
-# orders = [Order(i, base_date + timedelta(days = i), i * 100) for i in range(1000)]
-#
-# import random
-# random.shuffle(orders)
-#
-# def bubble_sort(orders):
-#     orders = orders.copy()
-#     n = len(orders)
-#     for i in range(n):
-#         for j in range(n -  i - 1):
-#             if orders[j].created_at > orders[j +1].created_at:
-#                 orders[j], orders[j +1] = orders[j +1], orders[j]
-#     return orders
-#
-# def sorted_orders(orders):
-#     return sorted(orders, key=lambda x: x.created_at)
-#
-# def compare_sorting(orders):
-#     start_time = time.perf_counter()
-#     bubble_sort(orders)
-#     time_bubble = time.perf_counter() - start_time
-#     start_time = time.perf_counter()
-#     sorted_orders(orders)
-#     time_sorted = time.perf_counter() - start_time
-#     speedup = time_bubble / time_sorted
-#
-#     print(f"Пузырьковая сортировка: {time_bubble:.4f} секунд")
-#     print(f"Метод sorted(): {time_sorted:.4f} секунд")
-#     print(f"Ускорение: {speedup:.2f}x")
-#
-# if __name__ == "__main__":
-#     compare_sorting(orders)
-
 import asyncio
 import json
-from contextlib import asynccontextmanager
-
 import logging
+from contextlib import asynccontextmanager
 
 import aiohttp
 import asyncpg
 import redis.asyncio as aioredis
-from fastapi import BackgroundTasks, FastAPI, HTTPException, status
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
 from src.database.async_repository import DB_CONFIG, ProductRepository
@@ -258,6 +35,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# Товары для GET /products живут в памяти, как просит урок
+products_data = [
+    {"id": 1, "name": "Ноутбук", "price": 50000, "quantity": 10},
+    {"id": 2, "name": "Мышь", "price": 1500, "quantity": 20},
+    {"id": 3, "name": "Клавиатура", "price": 3000, "quantity": 15},
+]
+
+# Учебный токен: настоящая проверка появится в теме про безопасность
+DEMO_TOKEN = "valid_token"
 
 
 async def load_product(product_id: int) -> dict | None:
@@ -291,6 +78,29 @@ async def count_view(product_id: int) -> int:
     return await resources["redis"].incr(f"views:product:{product_id}")
 
 
+@app.get("/products")
+def get_products(
+    response: Response,
+    authorization: str | None = Header(None),
+):
+    """Список товаров: пускаем только с токеном и разрешаем кэшировать ответ"""
+    if authorization is None or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Нужен заголовок Authorization: Bearer <токен>",
+        )
+
+    token = authorization.removeprefix("Bearer ")
+    if token != DEMO_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Токен не подошёл",
+        )
+
+    response.headers["Cache-Control"] = "max-age=3600"
+    return products_data
+
+
 @app.get("/products/{product_id}/full")
 async def get_product_full(product_id: int):
     """Товар, отзывы и просмотры - три источника параллельно"""
@@ -305,12 +115,6 @@ async def get_product_full(product_id: int):
 
     product["price"] = float(product["price"])
     return {**product, "reviews": reviews, "views": views}
-
-@app.get("/products")
-async def get_products(limit: int = 20, offset: int = 0):
-    repository = ProductRepository(resources["pool"])
-    products = await repository.list_products(limit, offset)
-    return {"products": products}
 
 
 class OrdersRequest(BaseModel):
