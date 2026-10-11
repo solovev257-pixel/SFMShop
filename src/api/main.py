@@ -306,6 +306,11 @@ async def get_product_full(product_id: int):
     product["price"] = float(product["price"])
     return {**product, "reviews": reviews, "views": views}
 
+@app.get("/products")
+async def get_products(limit: int = 20, offset: int = 0):
+    repository = ProductRepository(resources["pool"])
+    products = await repository.list_products(limit, offset)
+    return {"products": products}
 
 
 class OrdersRequest(BaseModel):
