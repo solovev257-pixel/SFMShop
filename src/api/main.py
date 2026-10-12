@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 import aiohttp
 import asyncpg
 import redis.asyncio as aioredis
-from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, FastAPI, Header, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
 from src.database.async_repository import DB_CONFIG, ProductRepository
@@ -149,3 +149,27 @@ async def process_orders_background(request: OrdersRequest, background_tasks: Ba
         "orders": len(request.order_ids),
         "message": "Обработка заказов запущена в фоне",
     }
+
+v1_router = APIRouter(prefix="/api/v1", tags=["v1"])
+@v1_router.get("/products")
+
+def get_products_v1():
+    """Версия 1: простой ответ, только список товаров"""
+    return {"products": products_data}
+
+
+v2_router = APIRouter(prefix="/api/v2", tags=["v2"])
+
+@v2_router.get("/products")
+def get_products_v2():
+    """Версия 2: товары внутри data и служебная информация в metadata"""
+    return {
+        "data": {"products": products_data}, "metadata": {
+            "total": len(products_data),
+            "version": "v2"
+        },
+    }
+
+app.include_router(v1_router)
+app.include_router(v2_router)
+
