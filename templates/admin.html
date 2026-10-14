@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SFMShop - Управление товарами</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 16px; }
+        h1 { text-align: center; color: #333; }
+        form { background: #f5f5f5; padding: 20px; border-radius: 6px; }
+        label { display: block; margin-bottom: 4px; font-weight: bold; }
+        input { width: 100%; padding: 8px; margin-bottom: 14px; box-sizing: border-box; }
+        button { padding: 10px 18px; border: none; border-radius: 4px; background: #2e7d32; color: #fff; cursor: pointer; }
+        button:hover { background: #1b5e20; }
+        #loadCatalogBtn { margin-top: 24px; background: #1565c0; }
+        #loadCatalogBtn:hover { background: #0d47a1; }
+        #formStatus, #catalog { margin-top: 14px; }
+    </style>
+</head>
+<body>
+    <h1>Управление товарами SFMShop</h1>
+
+    <form id="productForm">
+        <label for="name">Название:</label>
+        <input type="text" id="name" required>
+
+        <label for="price">Цена, руб.:</label>
+        <input type="number" id="price" step="0.01" min="0" required>
+
+        <label for="quantity">Остаток на складе:</label>
+        <input type="number" id="quantity" min="0" required>
+
+        <button type="submit">Сохранить товар</button>
+    </form>
+    <div id="formStatus"></div>
+
+    <button id="loadCatalogBtn" type="button">Показать каталог</button>
+    <div id="catalog"></div>
+
+    <script>
+        const PRODUCTS_ENDPOINT = 'http://localhost:8000/products';
+        // Эндпоинт закрыт токеном, заголовок нужен в каждом запросе
+        const AUTH_HEADER = { 'Authorization': 'Bearer valid_token' };
+
+        // Создание товара: собираем поля формы в объект и шлём POST
+        document.getElementById('productForm').addEventListener('submit', async (event) => {
+            event.preventDefault(); // без этого браузер перезагрузит страницу
+            const status = document.getElementById('formStatus');
+            const payload = {
+                name: document.getElementById('name').value,
+                price: parseFloat(document.getElementById('price').value),
+                quantity: parseInt(document.getElementById('quantity').value),
+            };
+            try {
+                const response = await fetch(PRODUCTS_ENDPOINT, {
+                    method: 'POST',
+                    headers: { ...AUTH_HEADER, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                status.textContent = response.ok
+                    ? 'Товар сохранён'
+                    : `Сервер отклонил запрос, статус ${response.status}`;
+            } catch (error) {
+                status.textContent = `Сервер недоступен: ${error.message}`;
+            }
+        });
+
+        // Загрузка каталога: GET, ответ приходит массивом объектов
+        document.getElementById('loadCatalogBtn').addEventListener('click', async () => {
+            const catalog = document.getElementById('catalog');
+            catalog.textContent = 'Загрузка...';
+            try {
+                const response = await fetch(PRODUCTS_ENDPOINT, { method: 'GET', headers: AUTH_HEADER });
+                if (!response.ok) {
+                    catalog.textContent = `Каталог не загрузился, статус ${response.status}`;
+                    return;
+                }
+                const items = await response.json();
+                catalog.textContent = ''; // убираем надпись о загрузке и старый список
+                if (items.length === 0) {
+                    catalog.textContent = 'Каталог пуст';
+                    return;
+                }
+                const list = document.createElement('ul');
+                for (const item of items) {
+                    const row = document.createElement('li');
+                    row.textContent = `${item.name} — ${item.price} руб., осталось ${item.quantity} шт.`;
+                    list.appendChild(row);
+                }
+                catalog.appendChild(list);
+            } catch (error) {
+                catalog.textContent = `Сервер недоступен: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
