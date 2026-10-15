@@ -1,17 +1,19 @@
 import asyncio
 import json
 import logging
+import time
 from contextlib import asynccontextmanager
 
 import aiohttp
 import asyncpg
 import redis.asyncio as aioredis
-from fastapi import APIRouter, BackgroundTasks, FastAPI, Header, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, FastAPI, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from src.database.async_repository import DB_CONFIG, ProductRepository
 from src.services.async_service import process_orders_async
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 REVIEWS_API_URL = "https://api.reviews.sfmshop.ru/product"
@@ -35,6 +37,20 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Пишет в лог каждый запрос: метод, путь, статус и длительность"""
+    started_at = time.time()
+    logger.info("-> %s %s", request.method, request.url.path)
+
+    response = await call_next(request)  # передаём запрос дальше, к эндпоинту, и ждём ответ
+
+    duration = time.time() - started_at
+    logger.info("<- %s %s %s за %.3f с", request.method, request.url.path, response.status_code, duration)
+    response.headers["X-Process-Time"] = f"{duration:.4f}"
+    return response
 
 # Товары для GET /products живут в памяти, как просит урок
 products_data = [
