@@ -1,191 +1,106 @@
-import asyncio
-import json
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-import aiohttp
 import asyncpg
-import redis.asyncio as aioredis
-from fastapi import APIRouter, BackgroundTasks, FastAPI, Header, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field
+from fastapi import Depends, FastAPI, Request, Response, status
+from fastapi.responses import HTMLResponse
+from openai import AsyncOpenAI
 
-from src.database.async_repository import DB_CONFIG, ProductRepository
-from src.services.async_service import process_orders_async
+from src.api.routes import orders, products, users
+from src.api.schemas import SupportRequest
+from src.core.config import settings
+from src.database.async_repository import DB_CONFIG
+from src.dependencies import get_current_user, get_order_repository
+from src.services.cache_service import close_cache, redis_client
+from src.services.support_service import SupportAnswer, answer_support
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-REVIEWS_API_URL = "https://api.reviews.sfmshop.ru/product"
-REVIEWS_CACHE_TTL = 600  # 10 минут
-
-resources: dict = {}
+ADMIN_PAGE = Path(__file__).resolve().parents[2] / "templates" / "admin.html"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Открываем пул БД, Redis и HTTP-сессию на старте, закрываем при остановке"""
-    resources["pool"] = await asyncpg.create_pool(**DB_CONFIG, min_size=1, max_size=5)
-    resources["redis"] = aioredis.from_url("redis://localhost:6379", decode_responses=True)
-    resources["http"] = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3))
-
+    """Пул соединений с БД живёт всё время работы приложения"""
+    app.state.pool = await asyncpg.create_pool(**DB_CONFIG, min_size=1, max_size=10)
     yield
-
-    await resources["http"].close()
-    await resources["redis"].aclose()
-    await resources["pool"].close()
+    await app.state.pool.close()
+    await close_cache()
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(title="SFMShop API", lifespan=lifespan)
 
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     """Пишет в лог каждый запрос: метод, путь, статус и длительность"""
-    started_at = time.time()
+    started_at = time.perf_counter()
     logger.info("-> %s %s", request.method, request.url.path)
 
-    response = await call_next(request)  # передаём запрос дальше, к эндпоинту, и ждём ответ
+    response = await call_next(request)
 
-    duration = time.time() - started_at
+    duration = time.perf_counter() - started_at
     logger.info("<- %s %s %s за %.3f с", request.method, request.url.path, response.status_code, duration)
     response.headers["X-Process-Time"] = f"{duration:.4f}"
     return response
 
-# Товары для GET /products живут в памяти, как просит урок
-products_data = [
-    {"id": 1, "name": "Ноутбук", "price": 50000, "quantity": 10},
-    {"id": 2, "name": "Мышь", "price": 1500, "quantity": 20},
-    {"id": 3, "name": "Клавиатура", "price": 3000, "quantity": 15},
-]
 
-# Учебный токен: настоящая проверка появится в теме про безопасность
-DEMO_TOKEN = "valid_token"
+app.include_router(products.router, prefix="/api/v1")
+app.include_router(orders.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
 
 
-async def load_product(product_id: int) -> dict | None:
-    """Товар из PostgreSQL через репозиторий"""
-    repository = ProductRepository(resources["pool"])
-    return await repository.get_by_id(product_id)
+async def get_llm_client():
+    async with AsyncOpenAI(
+        api_key=settings.llm_api_key or "no-key",
+        base_url=settings.llm_base_url,
+        max_retries=0,
+    ) as client:
+        yield client
 
 
-async def load_reviews(product_id: int) -> list:
-    """Отзывы: сначала ищем в кэше Redis, если нет - идём во внешний API"""
-    cache_key = f"cache:reviews:{product_id}"
-
-    cached_reviews = await resources["redis"].get(cache_key)
-    if cached_reviews is not None:
-        return json.loads(cached_reviews)
-
-    try:
-        async with resources["http"].get(f"{REVIEWS_API_URL}/{product_id}") as response:
-            response.raise_for_status()
-            reviews = await response.json()
-    except (aiohttp.ClientError, asyncio.TimeoutError):
-        # Сервис отзывов недоступен - отдаём товар без отзывов
-        return []
-
-    await resources["redis"].setex(cache_key, REVIEWS_CACHE_TTL, json.dumps(reviews))
-    return reviews
-
-
-async def count_view(product_id: int) -> int:
-    """Счётчик просмотров: incr в Redis атомарный, гонки нет"""
-    return await resources["redis"].incr(f"views:product:{product_id}")
-
-
-@app.get("/products")
-def get_products(
-    response: Response,
-    authorization: str | None = Header(None),
+@app.post("/api/v1/support", response_model=SupportAnswer, tags=["support"])
+async def support(
+    request: SupportRequest,
+    current_user_id: int = Depends(get_current_user),
+    order_repo=Depends(get_order_repository),
+    client=Depends(get_llm_client),
 ):
-    """Список товаров: пускаем только с токеном и разрешаем кэшировать ответ"""
-    if authorization is None or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Нужен заголовок Authorization: Bearer <токен>",
-        )
-
-    token = authorization.removeprefix("Bearer ")
-    if token != DEMO_TOKEN:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Токен не подошёл",
-        )
-
-    response.headers["Cache-Control"] = "max-age=3600"
-    return products_data
-
-
-@app.get("/products/{product_id}/full")
-async def get_product_full(product_id: int):
-    """Товар, отзывы и просмотры - три источника параллельно"""
-    product, reviews, views = await asyncio.gather(
-        load_product(product_id),
-        load_reviews(product_id),
-        count_view(product_id),
+    return await answer_support(
+        question=request.question,
+        current_user_id=current_user_id,
+        order_repo=order_repo,
+        client=client,
     )
 
-    if product is None:
-        raise HTTPException(status_code=404, detail="Товар не найден")
 
-    product["price"] = float(product["price"])
-    return {**product, "reviews": reviews, "views": views}
-
-
-class OrdersRequest(BaseModel):
-    """Тело запроса: список id заказов, от 1 до 1000 штук"""
-    order_ids: list[int] = Field(min_length=1, max_length=1000)
+@app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
+async def admin_page():
+    return ADMIN_PAGE.read_text(encoding="utf-8")
 
 
-@app.post("/orders/process")
-async def process_orders_endpoint(request: OrdersRequest):
-    """Обработать заказы параллельно и сразу вернуть итог"""
+@app.get("/health/live", tags=["health"])
+async def liveness():
+    return {"status": "alive"}
+
+
+@app.get("/health/ready", tags=["health"])
+async def readiness(response: Response):
+    checks = {"database": False, "redis": False}
     try:
-        results = await process_orders_async(request.order_ids)
-    except Exception as error:
-        logger.exception("Сбой при обработке заказов")
-        raise HTTPException(status_code=500, detail="Не удалось обработать заказы") from error
+        await app.state.pool.fetchval("SELECT 1")
+        checks["database"] = True
+    except Exception:
+        logger.warning("Readiness: база недоступна")
+    try:
+        checks["redis"] = bool(await redis_client.ping())
+    except Exception:
+        logger.info("Readiness: Redis недоступен, приложение работает без кэша")
 
-    failed = [result for result in results if result["status"] == "failed"]
-    return {
-        "status": "success" if not failed else "partial",
-        "processed": len(results) - len(failed),
-        "failed": len(failed),
-        "results": results,
-    }
-
-
-@app.post("/orders/process-background", status_code=status.HTTP_202_ACCEPTED)
-async def process_orders_background(request: OrdersRequest, background_tasks: BackgroundTasks):
-    """Принять заказы и обработать их в фоне, уже после ответа"""
-    background_tasks.add_task(process_orders_async, request.order_ids)
-    return {
-        "status": "accepted",
-        "orders": len(request.order_ids),
-        "message": "Обработка заказов запущена в фоне",
-    }
-
-v1_router = APIRouter(prefix="/api/v1", tags=["v1"])
-@v1_router.get("/products")
-
-def get_products_v1():
-    """Версия 1: простой ответ, только список товаров"""
-    return {"products": products_data}
-
-
-v2_router = APIRouter(prefix="/api/v2", tags=["v2"])
-
-@v2_router.get("/products")
-def get_products_v2():
-    """Версия 2: товары внутри data и служебная информация в metadata"""
-    return {
-        "data": {"products": products_data}, "metadata": {
-            "total": len(products_data),
-            "version": "v2"
-        },
-    }
-
-app.include_router(v1_router)
-app.include_router(v2_router)
-
+    if not checks["database"]:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {"status": "not_ready", "checks": checks}
+    return {"status": "ready", "checks": checks}

@@ -1,52 +1,98 @@
 import json
-import redis
-import secrets
-from datetime import datetime
-from src.database.queries import get_all_products_from_db, get_product_by_id_from_db
+import logging
+import time
 
-redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+import redis.asyncio as redis
+from redis.exceptions import RedisError
 
-def get_cached_products():
-    cache_key = "products:all"
-    cached = redis_client.get(cache_key)
-    if cached:
-        return json.loads(cached)
-    products = get_all_products_from_db()
-    redis_client.setex(cache_key, 3600, json.dumps(products))
-    return products
+from src.core.config import settings
 
-def get_cached_product(product_id):
-    cache_key = f"product:{product_id}"
-    cached = redis_client.get(cache_key)
-    if cached:
-        return json.loads(cached)
-    product = get_product_by_id_from_db(product_id)
-    if product:
-        redis_client.setex(cache_key, 3600, json.dumps(product))
-    return product
+logger = logging.getLogger(__name__)
 
-def create_user_session(user_id):
-    session_token = secrets.token_urlsafe(32)
-    session_key = f"session:{session_token}"
-    session_data = {"user_id": user_id, "created_at": datetime.now().isoformat()}
-    redis_client.setex(session_key, 86400, json.dumps(session_data))
-    return session_token
+PRODUCTS_TTL = 300  # 5 минут: компромисс между свежестью каталога и нагрузкой на БД
+REDIS_RETRY_AFTER = 30  # если Redis упал, не дёргаем его 30 секунд
 
-def get_user_session(session_token):
-    session_key = f"session:{session_token}"
-    cached = redis_client.get(session_key)
-    if cached:
-        return json.loads(cached)
-    return None
+redis_client = redis.from_url(
+    settings.redis_url,
+    decode_responses=True,
+    socket_connect_timeout=0.5,
+    socket_timeout=0.5,
+)
 
-def delete_user_session(session_token):
-    session_key = f"session:{session_token}"
-    redis_client.delete(session_key)
+_redis_down_until = 0.0
 
 
-if __name__ == "__main__":
-    session_token = create_user_session(user_id=1)
-    print(f"Сессия создана: {session_token}")
+def _redis_available() -> bool:
+    return time.monotonic() >= _redis_down_until
 
-    session = get_user_session(session_token)
-    print(f"Сессия: {session}")
+
+def _mark_redis_down(error: Exception) -> None:
+    """Запомнить, что Redis недоступен, и какое-то время работать без кэша"""
+    global _redis_down_until
+    _redis_down_until = time.monotonic() + REDIS_RETRY_AFTER
+    logger.warning("Redis недоступен, работаем без кэша %s с: %s", REDIS_RETRY_AFTER, error)
+
+
+async def cache_get(key: str):
+    if not _redis_available():
+        return None
+    try:
+        raw = await redis_client.get(key)
+    except (RedisError, OSError) as error:
+        _mark_redis_down(error)
+        return None
+    return json.loads(raw) if raw is not None else None
+
+
+async def cache_set(key: str, value, ttl: int = PRODUCTS_TTL) -> None:
+    if not _redis_available():
+        return
+    try:
+        await redis_client.setex(key, ttl, json.dumps(value, ensure_ascii=False, default=str))
+    except (RedisError, OSError) as error:
+        _mark_redis_down(error)
+
+
+async def invalidate_products() -> None:
+    """Сбросить кэш каталога после изменения товаров"""
+    if not _redis_available():
+        return
+    try:
+        keys = [key async for key in redis_client.scan_iter(match="products:*")]
+        if keys:
+            await redis_client.delete(*keys)
+    except (RedisError, OSError) as error:
+        _mark_redis_down(error)
+
+
+async def get_products_cached(repo, limit: int, offset: int) -> tuple[dict, bool]:
+    """Страница каталога: сначала Redis, потом БД. Возвращает (данные, попали_в_кэш)"""
+    key = f"products:list:{limit}:{offset}"
+    cached = await cache_get(key)
+    if cached is not None:
+        return cached, True
+
+    products = await repo.list_products(limit=limit, offset=offset)
+    total = await repo.count()
+    page = {"products": products, "total": total, "limit": limit, "offset": offset}
+    await cache_set(key, page)
+    return page, False
+
+
+async def get_product_cached(repo, product_id: int) -> tuple[dict | None, bool]:
+    key = f"products:item:{product_id}"
+    cached = await cache_get(key)
+    if cached is not None:
+        return cached, True
+
+    product = await repo.get_by_id(product_id)
+    if product is not None:
+        await cache_set(key, product)
+    return product, False
+
+
+async def close_cache() -> None:
+    try:
+        await redis_client.aclose()
+    except (RedisError, OSError):
+        pass

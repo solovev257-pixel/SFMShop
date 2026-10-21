@@ -1,6 +1,13 @@
 aiohttp
 asyncpg
+bcrypt
 fastapi
-uvicorn
+httpx
+openai
+psycopg2
+pydantic-settings
+python-dotenv
+python-jose
 redis>=5,<8
 requests
+uvicorn
