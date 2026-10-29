@@ -7,10 +7,14 @@ from src.api.schemas import OrderCreate
 from src.database.async_repository import OrderRepository
 from src.dependencies import get_current_user, get_order_repository
 from src.services.cache_service import invalidate_products
+from src.services.queue_producer import QueueProducer
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/orders", tags=["orders"])
+
+# один producer на всё приложение: соединение открывается при первой задаче
+producer = QueueProducer()
 
 
 async def send_order_confirmation(order_id: int, user_id: int, total: float) -> None:
@@ -37,6 +41,12 @@ async def create_order(
 
     await invalidate_products()
     background_tasks.add_task(send_order_confirmation, order.id, current_user_id, order.total)
+
+    # тяжёлую работу отдаём в очередь RabbitMQ, клиенту отвечаем сразу
+    producer.send_order_task(order.id, "send_email", {"user_id": current_user_id})
+    producer.send_order_task(order.id, "update_stock", {"items": items})
+    producer.send_order_task(order.id, "generate_report", {})
+
     return {"id": order.id, "total": order.total, "status": order.status}
 
 

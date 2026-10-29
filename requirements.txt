@@ -11,3 +11,4 @@ python-jose
 redis>=5,<8
 requests
 uvicorn
+pika
