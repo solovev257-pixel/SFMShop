@@ -58,7 +58,7 @@ class QueueProducer:
             )
         except pika.exceptions.AMQPError as error:
             logger.error("Задача не отправлена: %s", error)
-            return False
+            self.channel = None  # соединение сломано: при следующей задаче подключимся заново
 
         logger.info("Задача в очереди: %s", message)
         return True

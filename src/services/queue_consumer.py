@@ -1,11 +1,31 @@
 import json
 import logging
+import sys
 import time
 
 import pika
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# LogService пишет в MongoDB; если Mongo/pymongo нет, воркер работает только с консольным логом
+try:
+    from src.services.log_service import save_log
+except ImportError:
+    save_log = None
+
+
+def log_event(level: int, text: str, **extra):
+    """Записать событие в консоль и в LogService"""
+    global save_log
+    logger.log(level, text)
+    if save_log is None:
+        return
+    try:
+        save_log({"type": "queue", "level": logging.getLevelName(level), "message": text, **extra})
+    except Exception as error:  # падение логера не должно ронять обработку задачи
+        logger.warning("LogService недоступен, дальше пишу только в консоль: %s", error)
+        save_log = None  # не ждём Mongo на каждой строке
 
 
 # --- функции урока ---
@@ -30,16 +50,16 @@ def start_consumer(queue_name: str):
 # --- обработчики задач (учебные заглушки, пишут в лог) ---
 
 def send_email(order_id: int, user_id: int):
-    logger.info("Письмо по заказу %s отправлено пользователю %s", order_id, user_id)
+    log_event(logging.INFO, f"Письмо по заказу {order_id} отправлено пользователю {user_id}", order_id=order_id)
 
 
 def update_stock(order_id: int, items: list):
     for item in items:
-        logger.info("Заказ %s: со склада списан товар %s", order_id, item)
+        log_event(logging.INFO, f"Заказ {order_id}: со склада списан товар {item}", order_id=order_id)
 
 
 def generate_report(order_id: int):
-    logger.info("Отчёт по заказу %s готов", order_id)
+    log_event(logging.INFO, f"Отчёт по заказу {order_id} готов", order_id=order_id)
 
 
 # --- consumer с повторами ---
@@ -66,7 +86,7 @@ class QueueConsumer:
             self.channel.basic_qos(prefetch_count=1)  # по одной задаче на воркер
             return True
         except pika.exceptions.AMQPError as error:
-            logger.error("Не удалось подключиться к RabbitMQ: %s", error)
+            log_event(logging.ERROR, f"Не удалось подключиться к RabbitMQ: {error}")
             return False
 
     def run_task(self, message: dict):
@@ -82,7 +102,7 @@ class QueueConsumer:
         else:
             raise ValueError(f"Неизвестная задача: {task}")
 
-    def handle_message(self, ch, method, properties, body):
+    def process_message(self, ch, method, properties, body):
         """Обработать сообщение, при ошибке повторить"""
         # номер попытки лежит в заголовке сообщения
         attempt = (properties.headers or {}).get("x-retry-count", 0)
@@ -91,14 +111,14 @@ class QueueConsumer:
             message = json.loads(body)
             self.run_task(message)
             ch.basic_ack(delivery_tag=method.delivery_tag)
-            logger.info("Задача выполнена: %s", message)
+            log_event(logging.INFO, f"Задача выполнена: {message}")
             return
         except Exception as error:
-            logger.error("Ошибка задачи (попытка %s): %s", attempt + 1, error)
+            log_event(logging.ERROR, f"Ошибка задачи (попытка {attempt + 1}): {error}")
 
         if attempt < self.max_retries:
             attempt += 1
-            time.sleep(2 ** attempt)  # учебная пауза; в проде повтор делают через DLX + TTL
+            time.sleep(2 ** (attempt - 1))  # пауза 1, 2, 4 с; в проде повтор делают через DLX + TTL
             ch.basic_publish(
                 exchange="",
                 routing_key=self.QUEUE,
@@ -108,7 +128,7 @@ class QueueConsumer:
                     headers={"x-retry-count": attempt},
                 ),
             )
-            logger.info("Задача отправлена на повтор %s/%s", attempt, self.max_retries)
+            log_event(logging.WARNING, f"Задача отправлена на повтор {attempt}/{self.max_retries}")
         else:
             ch.basic_publish(
                 exchange="",
@@ -116,7 +136,7 @@ class QueueConsumer:
                 body=body,
                 properties=pika.BasicProperties(delivery_mode=2),
             )
-            logger.error("Попытки кончились, задача ушла в %s", self.ERROR_QUEUE)
+            log_event(logging.ERROR, f"Попытки кончились, задача ушла в {self.ERROR_QUEUE}")
 
         ch.basic_ack(delivery_tag=method.delivery_tag)  # старую копию убираем из очереди
 
@@ -124,8 +144,8 @@ class QueueConsumer:
         """Запустить воркер"""
         if not self.connect():
             return
-        self.channel.basic_consume(queue=self.QUEUE, on_message_callback=self.handle_message)
-        logger.info("Жду задачи в %s...", self.QUEUE)
+        self.channel.basic_consume(queue=self.QUEUE, on_message_callback=self.process_message)
+        log_event(logging.INFO, f"Жду задачи в {self.QUEUE}...")
         try:
             self.channel.start_consuming()
         except KeyboardInterrupt:
@@ -134,4 +154,9 @@ class QueueConsumer:
 
 
 if __name__ == "__main__":
-    start_consumer("test_queue")
+    # python -m src.services.queue_consumer        -> воркер заказов (можно открыть несколько терминалов)
+    # python -m src.services.queue_consumer test   -> простой consumer урока для test_queue
+    if len(sys.argv) > 1 and sys.argv[1] == "test":
+        start_consumer("test_queue")
+    else:
+        QueueConsumer().start_consuming()
