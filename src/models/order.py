@@ -60,6 +60,8 @@ class Order(LoggableMixin, SerializableMixin):
         self.items = items
         self.user = user
         self.log(f"Создан заказ: {order_id}")
+    def calculate_total(self):
+        return sum(item.price * item.quantity for item in self.items)
 
     def __len__(self):
         return len(self.items)
