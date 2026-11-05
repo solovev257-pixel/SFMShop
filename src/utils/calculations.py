@@ -53,6 +53,14 @@
 # подключаем модуль time чтобы замерять скорость функции
 import time
 
+
+def calculate_discount(price, discount_rate):
+    return price * discount_rate
+
+
+def calculate_total(price, quantity):
+    return price * quantity
+
 # создаем шаблон товара с параметрами  id, name, price
 class Product:
     def __init__(self, id, name, price):
