@@ -61,6 +61,19 @@ def calculate_discount(price, discount_rate):
 def calculate_total(price, quantity):
     return price * quantity
 
+
+FREE_SHIPPING_THRESHOLD = 5000
+
+
+def calculate_delivery_discount(order_total: float, delivery_cost: float) -> float:
+    """Возвращает стоимость доставки: 0 при заказе от порога, иначе полную."""
+    return 0 if order_total >= FREE_SHIPPING_THRESHOLD else delivery_cost
+
+
+def calculate_delivery(weight: float, distance: float) -> float:
+    """Доставка: база 100 руб + 10 руб за кг + 5 руб за км."""
+    return 100 + weight * 10 + distance * 5
+
 # создаем шаблон товара с параметрами  id, name, price
 class Product:
     def __init__(self, id, name, price):

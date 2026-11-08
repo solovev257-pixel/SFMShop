@@ -1,6 +1,6 @@
 import pytest
 
-from src.utils.calculations import calculate_discount, calculate_total
+from src.utils.calculations import calculate_discount, calculate_total, calculate_delivery_discount, calculate_delivery
 
 
 @pytest.mark.parametrize("price, rate, expected", [
@@ -20,3 +20,22 @@ def test_calculate_discount(price, rate, expected):
 ])
 def test_calculate_total(price, quantity, expected):
     assert calculate_total(price, quantity) == expected
+
+
+@pytest.mark.parametrize("order_total, delivery_cost, expected", [
+    (4999, 400, 400),
+    (5000, 400, 0),
+    (12000, 700, 0),
+])
+def test_calculate_delivery_discount(order_total, delivery_cost, expected):
+    assert calculate_delivery_discount(order_total, delivery_cost) == expected
+
+
+@pytest.mark.parametrize("weight, distance, expected", [
+    (1, 10, 160),
+    (5, 50, 400),
+    (10, 100, 700),
+])
+def test_calculate_delivery(weight, distance, expected):
+    assert calculate_delivery(weight, distance) == expected
+
