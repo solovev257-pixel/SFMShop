@@ -7,6 +7,7 @@ from src.api.schemas import OrderCreate
 from src.database.async_repository import OrderRepository
 from src.dependencies import get_current_user, get_order_repository
 from src.services.cache_service import invalidate_products
+from src.services.log_service import log_service
 from src.services.queue_producer import QueueProducer
 
 logger = logging.getLogger(__name__)
@@ -30,14 +31,23 @@ async def create_order(
     orders: OrderRepository = Depends(get_order_repository),
 ):
     items = [item.model_dump() for item in data.items]
+    log_service.info("Создание заказа", user_id=current_user_id, items_count=len(items))
     try:
         order = await orders.create(current_user_id, items)
     except LookupError as error:
+        log_service.warning("Заказ не создан: товар не найден", user_id=current_user_id, error=str(error))
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error))
     except ValueError as error:
+        log_service.warning("Заказ не создан: не хватает товара", user_id=current_user_id, error=str(error))
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error))
     except asyncpg.ForeignKeyViolationError:
+        log_service.warning("Заказ не создан: пользователь не найден", user_id=current_user_id)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
+    except Exception:
+        log_service.exception("Ошибка создания заказа", user_id=current_user_id)
+        raise
+
+    log_service.info("Заказ создан", order_id=order.id, user_id=current_user_id, total=order.total)
 
     await invalidate_products()
     background_tasks.add_task(send_order_confirmation, order.id, current_user_id, order.total)

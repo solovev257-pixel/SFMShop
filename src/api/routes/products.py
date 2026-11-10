@@ -8,6 +8,7 @@ from src.database.async_repository import ProductRepository
 from src.dependencies import get_current_user, get_product_repository
 from src.services.cache_service import get_product_cached, get_products_cached, invalidate_products
 from src.services.exchange_client import AsyncExchangeClient
+from src.services.log_service import log_service
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,13 @@ async def list_products(
     offset: int = Query(0, ge=0),
     repo: ProductRepository = Depends(get_product_repository),
 ):
-    page, from_cache = await get_products_cached(repo, limit, offset)
+    log_service.debug("Запрос списка товаров", limit=limit, offset=offset)
+    try:
+        page, from_cache = await get_products_cached(repo, limit, offset)
+    except Exception:
+        log_service.exception("Ошибка получения товаров", limit=limit, offset=offset)
+        raise
+    log_service.info("Товары получены", count=len(page.get("products", [])), from_cache=from_cache)
     response.headers["X-Cache"] = "HIT" if from_cache else "MISS"
     response.headers["Cache-Control"] = "public, max-age=60"
     return page
