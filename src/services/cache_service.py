@@ -12,8 +12,10 @@ logger = logging.getLogger(__name__)
 PRODUCTS_TTL = 300  # 5 минут: компромисс между свежестью каталога и нагрузкой на БД
 REDIS_RETRY_AFTER = 30  # если Redis упал, не дёргаем его 30 секунд
 
-redis_client = redis.from_url(
-    settings.redis_url,
+redis_client = redis.Redis(
+    host=settings.redis_host,
+    port=settings.redis_port,
+    db=0,
     decode_responses=True,
     socket_connect_timeout=0.5,
     socket_timeout=0.5,

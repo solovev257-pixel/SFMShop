@@ -6,7 +6,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 30
 
-    redis_url: str = "redis://localhost:6379/0"
+    # в docker compose REDIS_HOST=redis (имя сервиса), локально остаётся localhost
+    redis_host: str = "localhost"
+    redis_port: int = 6379
 
     llm_api_key: str = ""
     llm_base_url: str = "https://api.vsegpt.ru/v1"

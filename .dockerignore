@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+.venv/
+.venvс/
+venv/
+.idea/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+src/Screenshots/
