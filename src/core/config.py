@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
 
+    # MongoDB для логов (src/services/log_service.py)
+    mongo_host: str = "localhost"
+    mongo_port: int = 27017
+
+    debug: bool = False
+    sentry_dsn: str = ""
+
     llm_api_key: str = ""
     llm_base_url: str = "https://api.vsegpt.ru/v1"
     llm_model: str = "openai/gpt-4o-mini"

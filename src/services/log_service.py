@@ -1,15 +1,10 @@
 from pymongo import MongoClient
 from datetime import datetime, timedelta
 import logging
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
+from src.core.config import settings
 
-client = MongoClient(
-    host=os.getenv('MONGO_HOST', 'localhost'),
-    port=int(os.getenv('MONGO_PORT', 27017))
-)
+client = MongoClient(host=settings.mongo_host, port=settings.mongo_port)
 
 db = client['sfmshop_logs']
 logs_collection = db['logs']
@@ -96,7 +91,7 @@ class LogService:
 
 # Мониторинг ошибок через Sentry (подключается в src/api/main.py при наличии DSN):
 # import sentry_sdk
-# sentry_sdk.init(dsn=os.getenv("SENTRY_DSN"), traces_sample_rate=1.0)
+# sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=1.0)
 # После этого необработанные ошибки FastAPI сами уходят в Sentry с traceback.
 
 log_service = LogService()

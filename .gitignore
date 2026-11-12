@@ -35,3 +35,8 @@ build/
 .env
 __pycache__/
 *.pyc
+
+# Локальные варианты окружения
+.env.local
+.env.*.local
+.coverage
