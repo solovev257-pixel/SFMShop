@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sfmshop-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: sfmshop
+  template:
+    metadata:
+      labels:
+        app: sfmshop
+    spec:
+      containers:
+        - name: app
+          image: sfmshop:latest
+          ports:
+            - containerPort: 8000
+          env:
+            # имена переменных совпадают с тем, что читает код (src/database/connection.py, src/core/config.py)
+            - name: DB_HOST
+              value: "postgres"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "sfmshop"
+            - name: DB_USER
+              value: "postgres"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sfmshop-secrets
+                  key: DB_PASSWORD
+            - name: REDIS_HOST
+              value: "redis"
+          # Kubernetes перезапустит Pod, если приложение зависло
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          # трафик пойдёт на Pod, только когда приложение достучалось до базы
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfmshop-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: sfmshop        # находит Pod'ы с этой меткой из deployment.yaml
+  ports:
+    - port: 80          # снаружи
+      targetPort: 8000  # порт приложения в контейнере
