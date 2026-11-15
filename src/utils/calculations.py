@@ -253,5 +253,4 @@ def benchmark_optimizations():
 
 
 if __name__ == "__main__":
-    benchmark_opti
-    mizations()
+    benchmark_optimizations()

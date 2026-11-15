@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Any
 
 import pika
 
@@ -28,8 +29,8 @@ class QueueProducer:
 
     def __init__(self, host: str = "localhost"):
         self.host = host
-        self.connection = None
-        self.channel = None
+        self.connection: Any = None
+        self.channel: Any = None
 
     def connect(self) -> bool:
         """Открыть соединение и канал, объявить очередь"""

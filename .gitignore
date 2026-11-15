@@ -40,3 +40,5 @@ __pycache__/
 .env.local
 .env.*.local
 .coverage
+.ruff_cache/
+.mypy_cache/
