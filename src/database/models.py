@@ -1,11 +1,9 @@
-from sqlalchemy import create_engine, Integer, String, Numeric, ForeignKey, DateTime
+﻿from sqlalchemy import create_engine, Integer, String, Numeric, ForeignKey, DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 from datetime import datetime, timezone
 from decimal import Decimal
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
+from sqlalchemy import URL
+from src.core.config import settings
 
 class Base(DeclarativeBase):
     pass
@@ -42,10 +40,11 @@ class Order(Base):
     user: Mapped["User"] = relationship(back_populates="orders")
 
 
-engine = create_engine(
-    f"postgresql://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', '')}@"
-    f"{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'sfmshop')}"
-)
+engine = create_engine(URL.create(
+    "postgresql+psycopg2", username=settings.db_user,
+    password=settings.db_password, host=settings.db_host,
+    port=settings.db_port, database=settings.db_name,
+))
 
 SessionLocal = sessionmaker(bind=engine)
 

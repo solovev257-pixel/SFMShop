@@ -1,0 +1,64 @@
+name: SFMShop CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      SFMShop_ENV_FILE: ""
+      JWT_SECRET_KEY: ci-synthetic-signing-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install ruff mypy
+          python -m pip check
+      - name: Check syntax and names
+        run: python -m ruff check src tests scripts/check_deployment.py scripts/check_support_live.py --select E9,F63,F7,F82
+      - name: Check types
+        run: python -m mypy src/core src/utils src/api src/database --ignore-missing-imports
+      - name: Tests and coverage above 80 percent
+        run: python -m pytest tests -q --cov=src --cov-report=term-missing --cov-report=xml --cov-report=json
+      - name: Save coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            coverage.json
+      - name: Validate Compose
+        run: docker compose --env-file .env.example -f docker/docker-compose.yml config --quiet
+
+  deploy:
+    name: Verify container deployment
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Build and start isolated demonstration stack
+        run: docker compose --env-file .env.example -f docker/docker-compose.yml -p sfmshop-ci up -d --build --wait --wait-timeout 180
+      - name: Verify HTTP flow with synthetic customers
+        run: python scripts/check_deployment.py
+      - name: Show status
+        if: always()
+        run: docker compose --env-file .env.example -f docker/docker-compose.yml -p sfmshop-ci ps
+      - name: Stop CI containers
+        if: always()
+        run: docker compose --env-file .env.example -f docker/docker-compose.yml -p sfmshop-ci down --volumes

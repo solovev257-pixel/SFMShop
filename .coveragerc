@@ -1,0 +1,8 @@
+[run]
+source = src
+
+[report]
+include_namespace_packages = True
+fail_under = 81
+precision = 2
+show_missing = True

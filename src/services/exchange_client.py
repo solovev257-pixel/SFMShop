@@ -1,7 +1,9 @@
-import asyncio
+﻿import asyncio
 import logging
 import time
 from typing import Optional
+
+from src.core.config import settings
 
 import httpx
 import requests
@@ -13,8 +15,8 @@ logger = logging.getLogger(__name__)
 class ExchangeClient:
     """Клиент для работы с API курсов валют"""
 
-    def __init__(self, base_url: str = "https://api.exchangerate-api.com/v4/latest"):
-        self.base_url = base_url
+    def __init__(self, base_url: str | None = None):
+        self.base_url = base_url or settings.exchange_base_url
         self.timeout = 5
         self.max_retries = 3
 
@@ -47,11 +49,11 @@ class AsyncExchangeClient:
 
     def __init__(
         self,
-        base_url: str = "https://api.exchangerate-api.com/v4/latest",
+        base_url: str | None = None,
         timeout: float = 5.0,
         max_retries: int = 3,
     ):
-        self.base_url = base_url
+        self.base_url = base_url or settings.exchange_base_url
         self.timeout = timeout
         self.max_retries = max_retries
 

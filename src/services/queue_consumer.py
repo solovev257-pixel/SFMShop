@@ -1,9 +1,10 @@
-import json
+﻿import json
 import logging
 import sys
 import time
 
 import pika
+from src.core.config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,7 +40,10 @@ def process_message(ch, method, properties, body):
 
 def start_consumer(queue_name: str):
     """Простой consumer (функция урока)"""
-    connection = pika.BlockingConnection(pika.ConnectionParameters("localhost"))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(
+        host=settings.rabbitmq_host, port=settings.rabbitmq_port,
+        credentials=pika.PlainCredentials(settings.rabbitmq_user, settings.rabbitmq_password),
+    ))
     channel = connection.channel()
     channel.queue_declare(queue=queue_name, durable=True)
     channel.basic_consume(queue=queue_name, on_message_callback=process_message)
@@ -70,8 +74,8 @@ class QueueConsumer:
     QUEUE = "order_processing"
     ERROR_QUEUE = "order_processing_errors"
 
-    def __init__(self, host: str = "localhost", max_retries: int = 3):
-        self.host = host
+    def __init__(self, host: str | None = None, max_retries: int = 3):
+        self.host = host or settings.rabbitmq_host
         self.max_retries = max_retries
         self.connection = None
         self.channel = None
@@ -79,7 +83,10 @@ class QueueConsumer:
     def connect(self) -> bool:
         """Подключиться и объявить обе очереди"""
         try:
-            self.connection = pika.BlockingConnection(pika.ConnectionParameters(self.host))
+            self.connection = pika.BlockingConnection(pika.ConnectionParameters(
+                host=self.host, port=settings.rabbitmq_port,
+                credentials=pika.PlainCredentials(settings.rabbitmq_user, settings.rabbitmq_password),
+            ))
             self.channel = self.connection.channel()
             self.channel.queue_declare(queue=self.QUEUE, durable=True)
             self.channel.queue_declare(queue=self.ERROR_QUEUE, durable=True)

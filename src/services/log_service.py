@@ -4,7 +4,7 @@ import logging
 
 from src.core.config import settings
 
-client = MongoClient(host=settings.mongo_host, port=settings.mongo_port)
+client: MongoClient = MongoClient(host=settings.mongo_host, port=settings.mongo_port)
 
 db = client['sfmshop_logs']
 logs_collection = db['logs']

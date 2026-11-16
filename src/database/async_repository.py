@@ -1,20 +1,11 @@
-import asyncio
-import os
+﻿import asyncio
 from dataclasses import dataclass
 from decimal import Decimal
 
 import asyncpg
-from dotenv import load_dotenv
+from src.core.config import settings
 
-load_dotenv()
-
-DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "localhost"),
-    "port": int(os.getenv("DB_PORT", 5432)),
-    "database": os.getenv("DB_NAME", "sfmshop"),
-    "user": os.getenv("DB_USER", "postgres"),
-    "password": os.getenv("DB_PASSWORD"),
-}
+DB_CONFIG = settings.db_config
 
 
 def _row_to_dict(row) -> dict:
@@ -168,7 +159,7 @@ class OrderRepository:
                     )
 
                 order_id = await conn.fetchval(
-                    "INSERT INTO orders (user_id, total) VALUES ($1, $2) RETURNING id",
+                    "INSERT INTO orders (user_id, total, status) VALUES ($1, $2, 'created') RETURNING id",
                     user_id,
                     total,
                 )

@@ -18,6 +18,8 @@ spec:
           ports:
             - containerPort: 8000
           env:
+            - name: SFMShop_ENV_FILE
+              value: ""
             # имена переменных совпадают с тем, что читает код (src/database/connection.py, src/core/config.py)
             - name: DB_HOST
               value: "postgres"
@@ -34,6 +36,25 @@ spec:
                   key: DB_PASSWORD
             - name: REDIS_HOST
               value: "redis"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: MONGO_HOST
+              value: "mongo"
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sfmshop-secrets
+                  key: JWT_SECRET_KEY
+            - name: RABBITMQ_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sfmshop-secrets
+                  key: RABBITMQ_USER
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sfmshop-secrets
+                  key: RABBITMQ_PASSWORD
           # Kubernetes перезапустит Pod, если приложение зависло
           livenessProbe:
             httpGet:

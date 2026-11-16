@@ -1,59 +1,126 @@
+x-app-environment: &app-environment
+  SFMShop_ENV_FILE: ""
+  DB_HOST: db
+  DB_PORT: 5432
+  DB_NAME: ${DB_NAME:-sfmshop}
+  DB_USER: ${DB_USER:-postgres}
+  DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the environment file}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in the environment file}
+  JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+  ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-30}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_PORT: 5672
+  RABBITMQ_USER: ${RABBITMQ_USER:-sfmshop}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in the environment file}
+  MONGO_HOST: mongo
+  MONGO_PORT: 27017
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_BASE_URL: ${LLM_BASE_URL:-https://api.vsegpt.ru/v1}
+  LLM_MODEL: ${LLM_MODEL:-openai/gpt-4o-mini}
+  LLM_TIMEOUT: ${LLM_TIMEOUT:-10}
+  LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-400}
+  EXCHANGE_BASE_URL: ${EXCHANGE_BASE_URL:-https://api.exchangerate-api.com/v4/latest}
+  ORDER_DETAILS_API_URL: ${ORDER_DETAILS_API_URL:-https://api.orders.sfmshop.ru/order}
+  DEBUG: ${DEBUG:-false}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+
 services:
   app:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    restart: unless-stopped
     ports:
-      - "8000:8000"
-    environment:
-      # ровно те переменные, которые читает код проекта
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=sfmshop
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
+    environment: *app-environment
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [app_network]
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["python", "-m", "src.services.queue_consumer"]
+    restart: unless-stopped
+    environment: *app-environment
+    healthcheck:
+      disable: true
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongo:
         condition: service_started
-    networks:
-      - app_network
+    networks: [app_network]
 
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=sfmshop
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the environment file}
+      POSTGRES_DB: ${DB_NAME:-sfmshop}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # при первом запуске создаёт таблицы и тестовые товары
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
-      - "5433:5432"   # 5433 снаружи, чтобы не мешать локальному PostgreSQL
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d sfmshop"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 3s
-      retries: 5
-    networks:
-      - app_network
+      retries: 10
+    networks: [app_network]
 
   redis:
     image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
     ports:
-      - "6380:6379"   # 6380 снаружи, чтобы не мешать локальному Redis
+      - "127.0.0.1:${REDIS_EXTERNAL_PORT:-6380}:6379"
     volumes:
       - redis_data:/data
-    networks:
-      - app_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [app_network]
+
+  rabbitmq:
+    image: rabbitmq:4-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-sfmshop}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in the environment file}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [app_network]
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks: [app_network]
 
 volumes:
   postgres_data:
   redis_data:
+  rabbitmq_data:
+  mongo_data:
 
 networks:
   app_network:

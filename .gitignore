@@ -42,3 +42,10 @@ __pycache__/
 .coverage
 .ruff_cache/
 .mypy_cache/
+.venv/
+.venvс/
+.pytest_cache/
+coverage.json
+coverage.xml
+htmlcov/
+support_live_results.json

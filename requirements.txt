@@ -16,3 +16,5 @@ sqlalchemy[asyncio]>=2.0,<2.1
 pymongo
 pytest
 pytest-cov
+anyio
+pydantic

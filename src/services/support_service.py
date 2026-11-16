@@ -65,7 +65,7 @@ sources — список id документов, подтверждающих �
 async def ask_json(client, system: str, payload: dict) -> tuple[str, int, int]:
     response = await client.chat.completions.create(
         model=settings.llm_model,
-        max_tokens=400,
+        max_tokens=settings.llm_max_tokens,
         temperature=0,
         messages=[
             {"role": "system", "content": system},
@@ -74,7 +74,7 @@ async def ask_json(client, system: str, payload: dict) -> tuple[str, int, int]:
                 "content": json.dumps(payload, ensure_ascii=False),
             },
         ],
-        timeout=10.0,
+        timeout=settings.llm_timeout,
     )
     if not response.choices:
         raise ValueError("API не вернул ответ модели.")

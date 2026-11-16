@@ -1,4 +1,4 @@
-# import pg8000
+﻿# import pg8000
 #
 #
 # def connect_to_db():
@@ -119,20 +119,11 @@
 #         print(f"Ошибка при удалении заказа: {e}")
 #         return 0
 
-import os
 import psycopg2
 from contextlib import contextmanager
-from dotenv import load_dotenv
+from src.core.config import settings
 
-load_dotenv()
-
-DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "localhost"),
-    "port": int(os.getenv("DB_PORT", 5432)),
-    "database": os.getenv("DB_NAME", "sfmshop"),
-    "user": os.getenv("DB_USER", "postgres"),
-    "password": os.getenv("DB_PASSWORD")
-}
+DB_CONFIG = settings.db_config
 
 @contextmanager
 def get_connection():

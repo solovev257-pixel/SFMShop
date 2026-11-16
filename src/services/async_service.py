@@ -1,8 +1,9 @@
-import asyncio
+﻿import asyncio
 import logging
 import time
 
 import aiohttp
+from src.core.config import settings
 
 from src.models.order import Order
 from src.models.product import Product
@@ -69,7 +70,7 @@ async def demo_parallel_requests():
 
 
 
-ORDER_DETAILS_API_URL = "https://api.orders.sfmshop.ru/order"
+ORDER_DETAILS_API_URL = settings.order_details_api_url
 PROCESSING_DELAY = 0.1  # имитация обращения к базе или сервису, секунды
 
 

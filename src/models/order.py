@@ -71,7 +71,7 @@ class Order(LoggableMixin, SerializableMixin):
 
     def __add__(self, other):
         new_items = self.items + other.items
-        return Order(self.order_id, new_items)
+        return Order(self.order_id, new_items, self.user)
 
     def __lt__(self, other):
         return self.order_id < other.order_id

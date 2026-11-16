@@ -2,6 +2,7 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Awaitable, cast
 
 import asyncpg
 from fastapi import Depends, FastAPI, Request, Response, status
@@ -96,7 +97,7 @@ async def readiness(response: Response):
     except Exception:
         logger.warning("Readiness: база недоступна")
     try:
-        checks["redis"] = bool(await redis_client.ping())
+        checks["redis"] = bool(await cast(Awaitable[bool], redis_client.ping()))
     except Exception:
         logger.info("Readiness: Redis недоступен, приложение работает без кэша")
 

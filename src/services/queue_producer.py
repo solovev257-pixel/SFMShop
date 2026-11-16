@@ -1,15 +1,19 @@
-import json
+﻿import json
 import logging
 from typing import Any
 
 import pika
+from src.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 def send_message(queue_name: str, message: dict):
     """Отправить одно сообщение в очередь (функция урока)"""
-    connection = pika.BlockingConnection(pika.ConnectionParameters("localhost"))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(
+        host=settings.rabbitmq_host, port=settings.rabbitmq_port,
+        credentials=pika.PlainCredentials(settings.rabbitmq_user, settings.rabbitmq_password),
+    ))
     channel = connection.channel()
     channel.queue_declare(queue=queue_name, durable=True)
     channel.basic_publish(
@@ -27,15 +31,18 @@ class QueueProducer:
 
     QUEUE = "order_processing"
 
-    def __init__(self, host: str = "localhost"):
-        self.host = host
+    def __init__(self, host: str | None = None):
+        self.host = host or settings.rabbitmq_host
         self.connection: Any = None
         self.channel: Any = None
 
     def connect(self) -> bool:
         """Открыть соединение и канал, объявить очередь"""
         try:
-            self.connection = pika.BlockingConnection(pika.ConnectionParameters(self.host))
+            self.connection = pika.BlockingConnection(pika.ConnectionParameters(
+                host=self.host, port=settings.rabbitmq_port,
+                credentials=pika.PlainCredentials(settings.rabbitmq_user, settings.rabbitmq_password),
+            ))
             self.channel = self.connection.channel()
             self.channel.queue_declare(queue=self.QUEUE, durable=True)
             return True
@@ -59,7 +66,9 @@ class QueueProducer:
             )
         except pika.exceptions.AMQPError as error:
             logger.error("Задача не отправлена: %s", error)
-            self.channel = None  # соединение сломано: при следующей задаче подключимся заново
+            self.channel = None
+            return False
+            # соединение сломано: при следующей задаче подключимся заново
 
         logger.info("Задача в очереди: %s", message)
         return True
